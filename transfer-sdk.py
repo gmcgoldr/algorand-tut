@@ -50,14 +50,23 @@ def main(node_data_dir: Path):
     print("\nMove Algos:")
     # Can add aribtrary binary data (up to 1000 bytes) to the transaction.
     note = "Hello World".encode()
-    # Get defaults for the transaction parameters.
+    # Get defaults for the transaction parameters. In particular, there is a
+    # network-wide minimum transaction fee and maximum transaction duration.
+    # This will recommend the minimum fee and will set the first valid block
+    # to the current block, and the last valid block to the max duration from
+    # the current block.
+    # More: https://developer.algorand.org/docs/reference/transactions/
     params = algod_client.suggested_params()
     # Don't scale the fee with the transaction size (in bytes), instead use
     # the current minimum fee (in microAlgos). This also includes a transaction
     # validity range from the current block for the max duration (1000 blocks).
-    params.flat_fee = True
-    params.fee = 1000
     print("Params: {}".format(json.dumps(vars(params), indent="\t")))
+    # The fee is calculated as:
+    # `max(min_fee, fee if not flat_fee else (fee * num_bytes))`
+    # where `min_fee` is the minimum fee enfoced by the netwrok, and
+    # `num_bytes` is the size of the transaction. Setting the `fee` to zero
+    # means the minimum is used.
+    params.fee = 0
     txn = PaymentTxn(
         sender=from_address,
         sp=params,

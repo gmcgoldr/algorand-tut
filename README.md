@@ -20,7 +20,7 @@ In its current form, here's what the tutorial will walk you through:
 1. Install the Algorand networking and dev tools
 2. Create a private Algorand network and run a node
 3. Setup accounts and make transfers using CLIs and the Python SDK
-4. ~~Write a recurring payment contract~~
+4. Write a periodic payment contract
 5. ~~Write a distributed treasury contract with voting~~
 
 All steps are code are tested on Ubuntu 20.04 running in WSL2,
@@ -92,7 +92,7 @@ It's documentation is found at:
 
 ## Building a private network
 
-One of the goals stated in the introduction is to deploy a smart contract into a ledger.
+One of the goals stated in the introduction is to deploy a smart contract onto a ledger.
 In order to do this, you need to be able to make calls to a node which is connected to an Algorand network.
 You can either use a 3rd party online service which will give you access to a running node,
 or you can install a node locally.
@@ -204,16 +204,42 @@ Run the scripts:
 
 ```bash
 bash transfer-cli.sh
-sudo -u algorand python3 transfer-sdk.py
+sudo -u algorand python3 transfer-sdk.py /var/lib/algorand/net1/Primary
 ```
 
 ## Creating a smart contract
 
-<https://developer.algorand.org/docs/features/asc1/>
+A TEAL program (a.k.a. contract) is evaluated with a transaction data structure
+as its input (it can have more inputs), and outputs a single boolean which
+either approves or rejects the transactions.
+More:
 <https://developer.algorand.org/docs/reference/teal/specification/>
-<https://developer.algorand.org/docs/reference/transactions/>
 
-Stateless (signature) vs. stateful (application)
+### Stateless contracts
+
+A TEAL program compiled in "signature" mode is stateless.
+Its inputs are the transaction fields,
+as well as some globla fields,
+and it simply signs or does not sign the transaction depending on the result of its logic.
+
+One way to think of these contracts it that they are delegates of some account.
+The account signs the contract,
+and the contract can sign other transactions on the behalf of the account.
+
+Another way to think about this,
+in more abstract terms,
+is that the ledger represents some state
+(accounts hold some assets),
+and the contracts define allowed state transitions
+(which movement of assets are allowed).
+It is up to the nodes to send state transition requests to the network,
+and the validators use the contracts to validate those transitions.
+
+Run the demo:
+
+```bash
+sudo -u algorand python3 deploy-contract-1.py /var/lib/algorand/net1/Primary
+```
 
 ## Terminology
 

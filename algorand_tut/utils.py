@@ -1,7 +1,11 @@
+import subprocess
+import sys
 from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Dict
 
+import algosdk as ag
 from algosdk.kmd import KMDClient
 from algosdk.v2client.algod import AlgodClient
 
@@ -32,11 +36,11 @@ def get_wallet_id(kmd_client: KMDClient, name: str) -> str:
     Get the ID of the wallet of a given name from the `kmd`.
 
     Args:
-            kmd_client: the `kmd` client to query
-            name: the wallet name
+        kmd_client: the `kmd` client to query
+        name: the wallet name
 
     Returns:
-            the wallet ID in `kmd` or `None` if it is not found
+        the wallet ID in `kmd` or `None` if it is not found
     """
     wallets = {w["name"]: w for w in kmd_client.list_wallets()}
     wallet_id = wallets.get(name, {}).get("id", None)
@@ -50,9 +54,9 @@ def get_wallet_handle(client: KMDClient, wallet_id: str, password: str) -> str:
     context is closed.
 
     Args:
-            client: the client connected to the node's `kmd`
-            wallet_id: the wallet id
-            password: the wallet password
+        client: the client connected to the node's `kmd`
+        wallet_id: the wallet id
+        password: the wallet password
     """
     handle = client.init_wallet_handle(wallet_id, password)
     yield handle
@@ -66,10 +70,10 @@ def get_confirmed_transaction(
     Wait for the network to confirm a transaction and return its information.
 
     Args:
-            client: the client connected to the node
-            transaction_id: the transaction id
-            timeout: raise an error if no confirmation is received after this
-                    many blocks
+        client: the client connected to the node
+        transaction_id: the transaction id
+        timeout: raise an error if no confirmation is received after this
+            many blocks
     """
     start_round = client.status()["last-round"] + 1
     current_round = start_round
@@ -88,3 +92,52 @@ def get_confirmed_transaction(
         current_round += 1
 
     raise RuntimeError(f"no confirmation after {timeout_blocks} blocks")
+
+
+def compile_teal_source(source: str) -> bytes:
+    """
+    Compile teal source code into a teal binary using `goal`.
+
+    Writes intermediate files to a temporary directory and makes a subprocess
+    call to `goal`.
+
+    If the compilation fails, prints the output and rasies an error.
+
+    Args:
+        source: the teal source code
+
+    Returns:
+        the teal program binary
+    """
+    with TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        with (tmpdir / "program.teal").open("w") as fio:
+            fio.write(source)
+
+        args = [
+            "goal",
+            "clerk",
+            "compile",
+            "-o",
+            str(tmpdir / "program.tealc"),
+            str(tmpdir / "program.teal"),
+        ]
+        result = subprocess.run(args, check=True, capture_output=True)
+        if result.returncode != 0:
+            sys.stderr.write(result.stderr)
+            sys.stderr.flush()
+            # raise an error
+            result.check_returncode()
+
+        with (tmpdir / "program.tealc").open("rb") as fio:
+            return fio.read()
+
+
+def fix_lease_size(lease: bytes) -> bytes:
+    """
+    Given a string of bytes to use as a lease, right pad with 0s to get the
+    correct number of bytes.
+    """
+    lease = lease[: ag.constants.LEASE_LENGTH]
+    lease = lease + (b"\x00" * max(0, ag.constants.LEASE_LENGTH - len(lease)))
+    return lease
