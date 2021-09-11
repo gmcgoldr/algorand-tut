@@ -3,7 +3,7 @@ Construct TEAL contracts.
 
 A TEAL program (a.k.a. contract) is evaluated with a transaction data structure
 as its input (it can have more inputs), and outputs a single boolean which 
-either approves or rejects the transactions.
+either approves or rejects a transaction.
 
 In this module, python bindigs for TEAL are used to construct TEAL expressions.
 These expressions can be compiled into TEAL programs.

@@ -219,34 +219,40 @@ More:
 
 A TEAL program compiled in "signature" mode is stateless.
 Its inputs are the transaction fields,
-as well as some globla fields,
-and it simply signs or does not sign the transaction depending on the result of its logic.
+some globl fields,
+and optional invokation arguments.
+It signs or does not sign the transaction depending on the result of its logic.
 
-One way to think of these contracts it that they are delegates of some account.
-The account signs the contract,
-and the contract can sign other transactions on the behalf of the account.
-
-Another way to think about this,
-in more abstract terms,
-is that the ledger represents some state
+Consider that the ledger represents some state
 (accounts hold some assets),
-and the contracts define allowed state transitions
+and a contract defines some allowed state transitions
 (which movement of assets are allowed).
-It is up to the nodes to send state transition requests to the network,
-and the validators use the contracts to validate those transitions.
+A node to sends a request for some state transition
+(a transaction),
+and the validators use the contract to validate the transition.
+
+A contract can be used as a "contract account" or a "delegate signature".
+More: <https://developer.algorand.org/docs/features/asc1/stateless/modes/>
+
+An account can sign a contract,
+and the contract becomes a delegate of that account.
+Transactions can be submitted to the network without the sender signature,
+but with the contract in its stead.
+If the contract evalutes to true on the transaction,
+the network confirms it.
 
 Run the demo:
 
 ```bash
-sudo -u algorand python3 deploy-contract-1.py /var/lib/algorand/net1/Primary
+sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary
+sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary --use_delegate
 ```
 
 ## Terminology
 
 - Algorand protocol:
   protocol which can be used to run a blockchain based distributed ledger.
-  It is based on an idea similar to Practical Byzantine Fault Tolerance
-  with proof-of-stake.
+  It is based on an idea similar to Byzantine agreement stake to elect nodes.
   It offers block finality in seconds,
   as well as very large transaction throughput.
 

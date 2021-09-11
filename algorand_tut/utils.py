@@ -3,11 +3,14 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict
+from typing import Dict, Tuple
 
 import algosdk as ag
+from algosdk.future.transaction import PaymentTxn
 from algosdk.kmd import KMDClient
 from algosdk.v2client.algod import AlgodClient
+
+ZERO_ADDRESS = ag.encoding.encode_address(bytes(32))
 
 
 def build_algod_client(data_dir: Path) -> AlgodClient:
@@ -141,3 +144,46 @@ def fix_lease_size(lease: bytes) -> bytes:
     lease = lease[: ag.constants.LEASE_LENGTH]
     lease = lease + (b"\x00" * max(0, ag.constants.LEASE_LENGTH - len(lease)))
     return lease
+
+
+def fund_from_genesis(
+    algod_client: AlgodClient, kmd_client: KMDClient, amount: int
+) -> Tuple[str, str]:
+    """
+    Create a new account and fund it from the account that received the gensis
+    funds.
+
+    Expects an unencrypted wallet "unencrypted-default-wallet" whose first key
+    is the address of the account with the genesis funds.
+
+    Args:
+        algod_client: client to send node commands to
+        kmd_client: client to use in signing the transaction
+        amount: the quantity of microAlgos to fund
+
+    Returns:
+        the private key and address of the newly funded account
+    """
+    wallet_id = get_wallet_id(kmd_client, "unencrypted-default-wallet")
+
+    # Get the address of the source account with all the genesis tokens
+    with get_wallet_handle(kmd_client, wallet_id, "") as handle:
+        keys = kmd_client.list_keys(handle)
+        if not keys:
+            raise RuntimeError("funded account not found in wallet")
+        sender_address = keys[0]
+
+    private_key, address = ag.account.generate_account()
+
+    # Transfer algos to the escrow account
+    params = algod_client.suggested_params()
+    params.fee = 0  # use the minimum network fee
+    txn = PaymentTxn(sender=sender_address, sp=params, receiver=address, amt=amount)
+    # Sign with the sender account keys, managed by its wallet
+    with get_wallet_handle(kmd_client, wallet_id, "") as handle:
+        txn = kmd_client.sign_transaction(handle, "", txn)
+    txid = algod_client.send_transaction(txn)
+    # wait for the transaction to go through
+    get_confirmed_transaction(algod_client, txid, 5)
+
+    return private_key, address
