@@ -9,7 +9,10 @@ In this module, python bindigs for TEAL are used to construct TEAL expressions.
 These expressions can be compiled into TEAL programs.
 """
 
+from typing import NamedTuple
+
 import pyteal as tl
+from algosdk.future import transaction
 
 
 def build_periodic_payment(
@@ -101,3 +104,88 @@ def build_periodic_payment(
     # The overall contract allows transactions that are period payments, or
     # closing out the account
     return tl.And(core, tl.Or(payment, close))
+
+
+class AppPrograms(NamedTuple):
+    approval: tl.Expr
+    clear: tl.Expr
+    global_schema: transaction.StateSchema
+    local_schema: transaction.StateSchema
+
+
+def build_distributed_treasury_app() -> AppPrograms:
+    key_count = tl.Bytes("count")
+    opt_increment = tl.Bytes("increment")
+
+    zero = tl.Int(0)
+    one = tl.Int(1)
+
+    global_count = tl.App.globalGet(key_count)
+    sender_count_ex = tl.App.localGetEx(tl.Txn.sender(), tl.App.id(), key_count)
+    sender_count = tl.Seq(
+        [
+            sender_count_ex,
+            tl.If(sender_count_ex.hasValue(), sender_count_ex.value(), zero),
+        ]
+    )
+
+    on_creation = tl.Seq(
+        [
+            tl.App.globalPut(key_count, zero),
+            tl.Return(one),
+        ]
+    )
+
+    on_register = tl.Seq(
+        [
+            tl.App.localPut(tl.Txn.sender(), key_count, zero),
+            tl.Return(one),
+        ]
+    )
+
+    on_closeout = tl.Seq(
+        [
+            tl.App.globalPut(key_count, global_count - sender_count),
+            tl.Return(one),
+        ]
+    )
+
+    on_increment = tl.Seq(
+        [
+            tl.App.globalPut(key_count, global_count + one),
+            tl.App.localPut(tl.Txn.sender(), key_count, sender_count + one),
+            tl.Return(one),
+        ]
+    )
+
+    is_creator = tl.Global.creator_address() == tl.Txn.sender()
+
+    approval = tl.Cond(
+        [tl.Txn.application_id() == zero, on_creation],
+        [
+            tl.Txn.on_completion() == tl.OnComplete.DeleteApplication,
+            tl.Return(is_creator),
+        ],
+        [tl.Txn.on_completion() == tl.OnComplete.UpdateApplication, tl.Return(zero)],
+        [tl.Txn.on_completion() == tl.OnComplete.CloseOut, on_closeout],
+        [tl.Txn.on_completion() == tl.OnComplete.OptIn, on_register],
+        [
+            tl.Txn.on_completion() == tl.OnComplete.NoOp
+            and tl.Txn.application_args[0] == opt_increment,
+            on_increment,
+        ],
+        # disallow any other state traisition
+        [one, tl.Return(zero)],
+    )
+
+    clear = on_closeout
+
+    global_schema = transaction.StateSchema(num_uints=1, num_byte_slices=0)
+    local_schema = transaction.StateSchema(num_uints=1, num_byte_slices=0)
+
+    return AppPrograms(
+        approval=approval,
+        clear=clear,
+        global_schema=global_schema,
+        local_schema=local_schema,
+    )

@@ -248,6 +248,124 @@ sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary
 sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary --use_delegate
 ```
 
+### Stateful contracts
+
+A TEAL program compiled in "application" mode is stateful.
+Similarily to the stateless contracts,
+the logic is initiated by a transaction and returns a single boolean value.
+Here are three important differences:
+
+1. it does not approve a sepending transaction,
+   but rather approves arbitrary state changes to its state
+2. it has access state which is stored on the ledger
+3. it has access to more inputs
+
+Both are evaluating whether or not some state change should be applied.
+In a stateless contract,
+the state change is defined by the transaction (e.g. a payment) and is limited to moving assets on the ledger.
+In a stateful contract,
+the state change is an arbitrary manipulation of the contract state as defined in its program.
+
+The contract has access to global state (stored in the creating account),
+and local state (stored in each account which has opted into the contract).
+
+In a stateful transaction,
+the transaction type determines the change of state to take place upon returning true
+(e.g. payment).
+By contrast, in a stateless transaction,
+the transaction type indicates which interaction the calling account should have with the contract,
+after the contract finishes executing its program.
+
+Here are the transactions types:
+
+- `NoOp`: no further state changes are made to the ledger beyond the program's exectuion.
+- `OptIn`: contract state should be initialized in the calling account
+  (only relevant for contracts which use local storage).
+- `DeleteApplication`: contract program and state should be removed from the ledger.
+- `UpdateApplication`: contract program should be updated.
+- `CloseOut`: contract state should be removed from the calling account.
+- `ClearState`: contract state *will* be removed from the calling account.
+
+In general,
+each transaction will trigger the contract's program to execute,
+and will either take effect or not depending on its return value.
+However,
+the `ClearState` transaction will take effect no matter the return code.
+It holds true that if the program returns false,
+the state changes made during the program execution are not applied.
+
+NOTE: "program" here is used to describe the logic tied to the contract. But
+in fact there are two separate programs tied to a stateful contract:
+the `ApprovalProgram` and the `ClearStateProgram`.
+The latter is executed when the transaction is of type `ClearState`.
+
+NOTE: data has been described generically here, but in reality is constrained
+by size limits. These details can be found at:
+<https://developer.algorand.org/docs/reference/parameter_tables/>
+
+### Voting treasury demo
+
+The demo is intended to create a voting treasury:
+an account which can be funded by multiple users,
+and whose funds can be spent by users upon being voted-in as treasurer.
+
+Requirements for the demo:
+
+- An account can become a member by funding the contract.
+- A member can nomiate themselves as treasuer and propose a budget (amount).
+- A nomination voting period is triggered.
+- During a nomination voting period,
+  no other nominations are allowed.
+- During a nomination voting period,
+  members can cast a vote (weighted by their contribution to the funds).
+- The vote succeeds if it the sum of voted weights exceeds some threshold.
+- After a successful vote,
+  new nominations are not accepted for some duration (the mandate).
+- After a failed vote,
+  the nominee cannot nominate themselves for some duration (cooldown).
+- The treasurer can spend funds up to the proposed budget.
+
+Lacking functionality:
+
+- Voting on new memberships
+- Voting on contract closure
+- Unilateral contact exits
+- Initial configuration (e.g. pre-approved accounts, min funds to start)
+
+Approach:
+
+- A stateful contract will track:
+  - phase: accepting nomination, accepting votes
+  - current treasurer
+  - current budget
+  - nominated treasurer
+  - proposed budget
+  - tallied votes for nomiation
+- A stateless contract will hold the funds.
+- The stateless contract will approve transactions from the treasurer,
+  up to the current budget.
+- Communication between the two contracts will be done in the scratch space.
+- To spend,
+  the treasurer will submit a group of:
+  a transaction to the stateful contract seeking approval,
+  the payment transaction from the statless contract.
+- The stateful contract will verify that the treasurer is allowed to spend the amount in the payment transaction,
+  and write the result in the scratch space.
+- The stateless contract will ensure that it is the 2nd in a group of two transactions,
+  the first being the stateful contract,
+  and will read the approval from the scratch space.
+
+The communcation could also be done using an ASA,
+but this introduces many other state transitions
+(all standard functions related to ASAs).
+While these can be managed,
+it would appear to increase the risk of misconfiguration.
+
+On the other hand,
+with the current approach the scratch space must be trusted.
+It appears that the scratch space can be trusted if you trust the current contract group (and order).
+But I'm not completely sure of this yet.
+
 ## Terminology
 
 - Algorand protocol:
