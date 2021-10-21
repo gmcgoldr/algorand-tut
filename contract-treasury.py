@@ -16,6 +16,9 @@ from algorand_tut import contracts, utils
 
 
 def get_app_global_key(algod_client: AlgodClient, app_id: int, key: str):
+    """
+    Return the value for the given `key` in `app_id`'s global data.
+    """
     key = base64.b64encode(key.encode("utf8")).decode("ascii")
     app_info = algod_client.application_info(app_id)
     for key_state in app_info["params"]["global-state"]:
@@ -26,6 +29,10 @@ def get_app_global_key(algod_client: AlgodClient, app_id: int, key: str):
 
 
 def get_app_local_key(algod_client: AlgodClient, app_id: int, address: str, key: str):
+    """
+    Return the value for the given `key` in `app_id`'s local data for account
+    `address`.
+    """
     key = base64.b64encode(key.encode("utf8")).decode("ascii")
     account_info = algod_client.account_info(address)
     for app_state in account_info["apps-local-state"]:
@@ -39,6 +46,9 @@ def get_app_local_key(algod_client: AlgodClient, app_id: int, address: str, key:
 
 
 def print_state(algod_client: AlgodClient, app_id: int, addresses: List[str]):
+    """
+    Print the app's global data, and local data for `addressses`.
+    """
     print("Global:")
     print(get_app_global_key(algod_client, app_id, "count"))
     for address in addresses:
@@ -53,10 +63,6 @@ def main(node_data_dir: Path):
     algod_client = utils.build_algod_client(node_data_dir)
     kmd_client = utils.build_kmd_client(node_data_dir)
 
-    app = contracts.build_distributed_treasury_app()
-    tl.compileTeal(app.approval, mode=tl.Mode.Application, version=tl.MAX_TEAL_VERSION)
-    tl.compileTeal(app.clear, mode=tl.Mode.Application, version=tl.MAX_TEAL_VERSION)
-
     print("Funding accounts ...")
     account1_private_key, account1_address = utils.fund_from_genesis(
         algod_client, kmd_client, ag.util.algos_to_microalgos(10)
@@ -67,30 +73,42 @@ def main(node_data_dir: Path):
 
     print("Building contract ...")
     params = algod_client.suggested_params()
-    params.fee = 0
+    params.fee = 0  # use the minimum network fee
     # Compile the langauge binding to a TEAL program.
     app = contracts.build_distributed_treasury_app()
     txn = transaction.ApplicationCreateTxn(
+        # this will be the app creator
         sender=account1_address,
         sp=params,
+        # no state change requested in this transaciton beyond app creation
         on_complete=transaction.OnComplete.NoOpOC.real,
+        # the program to handle app state changes
         approval_program=utils.compile_teal_source(
             tl.compileTeal(
                 app.approval, mode=tl.Mode.Application, version=tl.MAX_TEAL_VERSION
             )
         ),
+        # the program to run when an account forces an opt-out
         clear_program=utils.compile_teal_source(
             tl.compileTeal(
                 app.clear, mode=tl.Mode.Application, version=tl.MAX_TEAL_VERSION
             )
         ),
+        # the amount of storage used by the app
         global_schema=app.global_schema,
         local_schema=app.local_schema,
     )
 
     txid = algod_client.send_transaction(txn.sign(account1_private_key))
     result = utils.get_confirmed_transaction(algod_client, txid, 5)
+    # thet the id of the created app, this is effectively the app's address,
+    # as this is where app state change transactions are sent
     app_id = result["application-index"]
+
+    # the app's id can also be found in the creating account's info
+    account_info = algod_client.account_info(account1_address)
+    created_app_ids = [a["id"] for a in account_info["created-apps"]]
+    assert app_id in created_app_ids
 
     print_state(algod_client, app_id, [account1_address, account2_address])
 
@@ -113,13 +131,13 @@ def main(node_data_dir: Path):
     params.fee = 0
 
     txn = transaction.ApplicationNoOpTxn(
-        account1_address, params, app_id, [b"increment"]
+        account1_address, params, app_id, ["increment".encode("utf8")]
     )
     txid = algod_client.send_transaction(txn.sign(account1_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
 
     txn = transaction.ApplicationNoOpTxn(
-        account2_address, params, app_id, [b"increment"]
+        account2_address, params, app_id, ["increment".encode("utf8")]
     )
     txid = algod_client.send_transaction(txn.sign(account2_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
