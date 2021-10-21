@@ -6,9 +6,7 @@ learn enough Algorand tooling and APIs to write a smart contract with voting mec
 and execute it on a ledger.
 
 A very quick foreword on Algorand for the uninitiated:
-Algorand is a pure proof-of-stake blockchain
-(the Algorand Foundation is working to become carbon-*negative*)
-with deployed smart contract functionality.
+Algorand is a pure proof-of-stake blockchain with deployed smart contract functionality.
 As a developer, it is attractive because the technology so far is proving robust,
 its smart contract language avoids pitfalls discovered in precursor technologies,
 and it is operationally simple enough that a node can be run on commodity hardware.
@@ -30,9 +28,33 @@ The steps should translate well to a native Ubuntu 20.04 installation,
 and can probably be translated fairly well to other Linux distributions,
 given that you have good familiarity with that distribution's tooling.
 
-For a good overview of how the different components of an Algorand development environment interact,
-and for a primer one some Algorand and general blockchain terminology, see:
-<https://developer.algorand.org/docs/build-apps/setup/>.
+## Key defintions
+
+Here are a few definitions to help read this document:
+
+- `algod`:
+  the Alogrand daemon which runs a node on a nework.
+- `node`:
+  a machine participating in the Algorand protocol,
+  and communicating with other nodes on a network.
+  The nodes keeps a copy of the ledger synchronized with the network,
+  and can propose modifications to the ledger (transactions).
+- `network`:
+  a group of nodes participating in a version of the Algorand protocol with a common genesis block.
+  The Algorand tools keep track of three networks: MainNet, TestNet and BetaNet.
+  MainNet and TestNet follow the same protocol,
+  but have different genesis blocks and thus different histories.
+  BetaNet follows a different protocol version.
+- `kmd`:
+  the key manager daemon which manages account information,
+  including private keys,
+  and relay that information to a node.
+- `account`:
+  a public / public key pair which can be used in the Algorand protocol.
+  Accounts on the ledger can:
+  track ownership of assets,
+  track state of smart contracts,
+  and authorize transactions.
 
 For more terminology, see the last section of this document.
 
@@ -96,13 +118,11 @@ One of the goals stated in the introduction is to deploy a smart contract onto a
 In order to do this, you need to be able to make calls to a node which is connected to an Algorand network.
 You can either use a 3rd party online service which will give you access to a running node,
 or you can install a node locally.
-And the node needs to talk to a network,
-which could be the: main net, test net, beta net, or a private network.
 
 In this tutorial, you will configure and run a node locally,
 and have it connect to your own private network.
 The advantages are that your work is fully self-contained,
-you can inspect and reason about all the ledge data,
+you can inspect and reason about all the ledger data,
 and you don't need to spend lots of time and hard drive space to synchronize with an existing ledger.
 
 ### Create the private network
@@ -185,7 +205,7 @@ sudo -u algorand kmd -d /var/lib/algorand/net1/Primary/kmd-v0.5 &
 
 The `-d` flag is used in many commands to specify a data directory.
 In this case,
-the node is being told to run with the data created by `goal`,
+the node is being told to run with the data created by `goal` when the private network was built,
 which connects the node to the private network.
 
 The key manager runs on a node and manages wallets.
@@ -209,33 +229,35 @@ sudo -u algorand python3 transfer-sdk.py /var/lib/algorand/net1/Primary
 
 ## Creating a smart contract
 
-A TEAL program (a.k.a. contract) is evaluated with a transaction data structure
-as its input (it can have more inputs), and outputs a single boolean which
-either approves or rejects the transactions.
 More:
 <https://developer.algorand.org/docs/reference/teal/specification/>
 
-### Stateless contracts
+### Smart signature (stateless)
 
 A TEAL program compiled in "signature" mode is stateless.
 Its inputs are the transaction fields,
 some globl fields,
 and optional invokation arguments.
-It signs or does not sign the transaction depending on the result of its logic.
+It signs or does not sign a transaction depending on the result of its logic.
 
 Consider that the ledger represents some state
 (accounts hold some assets),
 and a contract defines some allowed state transitions
 (which movement of assets are allowed).
-A node to sends a request for some state transition
+A node sends a request for some state transition
 (a transaction),
 and the validators use the contract to validate the transition.
 
 A contract can be used as a "contract account" or a "delegate signature".
 More: <https://developer.algorand.org/docs/features/asc1/stateless/modes/>
 
-An account can sign a contract,
-and the contract becomes a delegate of that account.
+If assets are sent to the contract,
+the contract can then "spend" those assets:
+transactions can be submitted which move assets from the contract address to another address.
+The network will confirm such transactions if and only if the contract logic evalues to true.
+
+Alternativeluy, an account can sign a contract.
+The contract then becomes a delegate of that account.
 Transactions can be submitted to the network without the sender signature,
 but with the contract in its stead.
 If the contract evalutes to true on the transaction,
@@ -248,17 +270,16 @@ sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary
 sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary --use_delegate
 ```
 
-### Stateful contracts
+### Smart contract (stateful)
 
 A TEAL program compiled in "application" mode is stateful.
-Similarily to the stateless contracts,
-the logic is initiated by a transaction and returns a single boolean value.
-Here are three important differences:
+It is similar to a stateless contract in that it is invoked by a transaction,
+and it evalutes some logic which returns true or false.
+However, a statelss contract:
 
-1. it does not approve a sepending transaction,
-   but rather approves arbitrary state changes to its state
-2. it has access state which is stored on the ledger
-3. it has access to more inputs
+- has some state which is tracked on the ledger
+- does not approve a sepending transaction,
+  but rather approves arbitrary state changes to its own state
 
 Both are evaluating whether or not some state change should be applied.
 In a stateless contract,
@@ -271,14 +292,14 @@ and local state (stored in each account which has opted into the contract).
 
 In a stateful transaction,
 the transaction type determines the change of state to take place upon returning true
-(e.g. payment).
+(e.g. a payment).
 By contrast, in a stateless transaction,
 the transaction type indicates which interaction the calling account should have with the contract,
 after the contract finishes executing its program.
 
 Here are the transactions types:
 
-- `NoOp`: no further state changes are made to the ledger beyond the program's exectuion.
+- `NoOp`: no further state changes are made to the ledger beyond the program's execution.
 - `OptIn`: contract state should be initialized in the calling account
   (only relevant for contracts which use local storage).
 - `DeleteApplication`: contract program and state should be removed from the ledger.
@@ -289,18 +310,18 @@ Here are the transactions types:
 In general,
 each transaction will trigger the contract's program to execute,
 and will either take effect or not depending on its return value.
+If the program returns false,
+the state changes made during the program execution are not confirmed by the network.
 However,
 the `ClearState` transaction will take effect no matter the return code.
-It holds true that if the program returns false,
-the state changes made during the program execution are not applied.
 
-NOTE: "program" here is used to describe the logic tied to the contract. But
-in fact there are two separate programs tied to a stateful contract:
+NOTE: "program" here is used to describe the logic tied to the contract.
+But in fact there are two separate programs tied to a stateful contract:
 the `ApprovalProgram` and the `ClearStateProgram`.
 The latter is executed when the transaction is of type `ClearState`.
 
-NOTE: data has been described generically here, but in reality is constrained
-by size limits. These details can be found at:
+NOTE: data has been described generically here, but in reality is constrained by size limits.
+These details can be found at:
 <https://developer.algorand.org/docs/reference/parameter_tables/>
 
 ### Voting treasury demo
@@ -360,11 +381,6 @@ but this introduces many other state transitions
 (all standard functions related to ASAs).
 While these can be managed,
 it would appear to increase the risk of misconfiguration.
-
-On the other hand,
-with the current approach the scratch space must be trusted.
-It appears that the scratch space can be trusted if you trust the current contract group (and order).
-But I'm not completely sure of this yet.
 
 ## Terminology
 

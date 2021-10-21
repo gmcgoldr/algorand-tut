@@ -38,9 +38,9 @@ new_address=$($pre goal -d $dir account -w Wallet2 list | tail -n 1 | awk -F' ' 
 # NOTE: the CLI output shouldn't be treated as a contract or API, so expect the
 # pipe processing to fail in future versions.
 
-printf "\nAccount balances:\n"
-printf "Genesis: %s" "$($pre goal -d $dir account balance -a $genesis_address)"
-printf "New: %s" "$($pre goal -d $dir account balance -a $new_address)"
+printf "\nAccount balances:"
+printf "\nGenesis: %s" "$($pre goal -d $dir account balance -a $genesis_address)"
+printf "\nNew: %s" "$($pre goal -d $dir account balance -a $new_address)"
 
 # The `clerk` command manages transactions. It uses the default wallet unless
 # otherwise specified. The wallet manages the private keys for its accounts,
@@ -48,5 +48,6 @@ printf "New: %s" "$($pre goal -d $dir account balance -a $new_address)"
 # if the wallet was encrypted, a password would be required to access it.
 printf "\nMove some Algos:\n"
 $pre goal -d $dir clerk send -a 1000000 -f $genesis_address -t $new_address
-printf "Genesis: %s" "$($pre goal -d $dir account balance -a $genesis_address)"
-printf "New: %s" "$($pre goal -d $dir account balance -a $new_address)"
+printf "\nGenesis: %s" "$($pre goal -d $dir account balance -a $genesis_address)"
+printf "\nNew: %s" "$($pre goal -d $dir account balance -a $new_address)"
+printf "\n"
