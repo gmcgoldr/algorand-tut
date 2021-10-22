@@ -355,7 +355,7 @@ class KeyInfo(NamedTuple):
 
     key: str
     has_type: Union[tl.Int, tl.Bytes]
-    init: Union[tl.Int, tl.Bytes]
+    init: Union[tl.Int, tl.Bytes] = None
 
 
 class StateBuilder:
@@ -365,8 +365,30 @@ class StateBuilder:
         GLOBAL = 0
         LOCAL = 1
 
-    def __init__(self, scope: Scope, key_infos: List[KeyInfo]):
+    def __init__(
+        self,
+        scope: Scope,
+        key_infos: List[KeyInfo],
+        app_id: tl.Expr = None,
+        account_id: tl.Expr = None,
+    ):
+        """
+        Prepare a collection of state keys for some scope.
+
+        The `scope` can be either `Scope.GLOBAL` or `Scope.LOCAL`. For a local
+        scope, this will interact with keys of the current transaction sender,
+        or of the account `account_id` if provided.
+
+        By default, the scope is for the current application. However, if an
+        `app_id` is provided, this will be used to interact with the state of
+        another app (in which case none of the keys can have the `init` field
+        as none are known to exist).
+        """
         self.scope = scope
+        self.account_id = account_id if account_id is not None else tl.Txn.sender()
+
+        is_foreign = app_id is not None
+        app_id = app_id if app_id is not None else tl.App.id()
 
         # map keys to info
         self.infos: Dict[str, KeyInfo] = {}
@@ -383,6 +405,9 @@ class StateBuilder:
             # currently keys are limited to 64 bytes
             if len(key.encode("utf8")) > 64:
                 raise ValueError(f"key too long: {key}")
+            if is_foreign and info.init is not None:
+                raise ValueError(f"key cannot have init into foreign app")
+
             key_bytes = tl.Bytes(key)
             self.bytes[key] = key_bytes
             self.infos[key] = info
@@ -393,7 +418,7 @@ class StateBuilder:
                     # NOTE: this is a `MaybeValue` which tracks the stored slot
                     # so the object must be re-used between loading and
                     # accessing the value, hence this has to be cached
-                    self.loader_ex[key] = tl.App.globalGetEx(tl.App.id(), key_bytes)
+                    self.loader_ex[key] = tl.App.globalGetEx(app_id, key_bytes)
                 else:
                     # this is just an expression, it doesn't need to be cached
                     # but this way the interface is kept consistent
@@ -403,10 +428,10 @@ class StateBuilder:
             elif scope is StateBuilder.Scope.LOCAL:
                 if info.init is None:
                     self.loader_ex[key] = tl.App.localGetEx(
-                        tl.Txn.sender(), tl.App.id(), key_bytes
+                        self.account_id, app_id, key_bytes
                     )
                 else:
-                    self.loader[key] = tl.App.localGet(tl.Txn.sender(), key_bytes)
+                    self.loader[key] = tl.App.localGet(self.account_id, key_bytes)
 
     def get(self, key: str) -> tl.Expr:
         """Build the expression to get the state value at `key`"""
@@ -438,7 +463,7 @@ class StateBuilder:
         if self.scope is StateBuilder.Scope.GLOBAL:
             return tl.App.globalPut(key_bytes, value)
         elif self.scope is StateBuilder.Scope.LOCAL:
-            return tl.App.localPut(tl.Txn.sender(), key_bytes, value)
+            return tl.App.localPut(self.account_id, key_bytes, value)
 
     def inc(self, key: str, value: Union[tl.Int, tl.Bytes]) -> tl.Expr:
         """
@@ -465,7 +490,7 @@ class StateBuilder:
                 setters.append(tl.App.globalPut(self.bytes[key], info.init))
             elif self.scope is StateBuilder.Scope.LOCAL:
                 setters.append(
-                    tl.App.localPut(tl.Txn.sender(), self.bytes[key], info.init)
+                    tl.App.localPut(self.account_id, self.bytes[key], info.init)
                 )
         return tl.Seq(*setters)
 

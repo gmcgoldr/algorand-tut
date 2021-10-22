@@ -116,27 +116,31 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
     globals = utils.StateBuilder(
         utils.StateBuilder.Scope.GLOBAL,
         [
+            # default keys
             utils.KeyInfo("funds_current", tl.Int, zero),
             utils.KeyInfo("funds_future", tl.Int, zero),
             utils.KeyInfo("votes_for", tl.Int, zero),
             utils.KeyInfo("votes_against", tl.Int, zero),
             utils.KeyInfo("term_used", tl.Int, zero),
             utils.KeyInfo("term_budget", tl.Int, zero),
-            utils.KeyInfo("nominee", tl.Bytes, None),
-            utils.KeyInfo("last_nomination_ts", tl.Int, None),
+            # optional keys
+            utils.KeyInfo("nominee", tl.Bytes),
+            utils.KeyInfo("last_nomination_ts", tl.Int),
         ],
     )
 
     locals = utils.StateBuilder(
         utils.StateBuilder.Scope.LOCAL,
         [
+            # default keys
             utils.KeyInfo("funds_current", tl.Int, zero),
             utils.KeyInfo("funds_future", tl.Int, zero),
             utils.KeyInfo("votes_for", tl.Int, zero),
             utils.KeyInfo("votes_against", tl.Int, zero),
-            utils.KeyInfo("last_nomination_ts", tl.Int, None),
-            utils.KeyInfo("last_vote_ts", tl.Int, None),
-            utils.KeyInfo("last_funds_ts", tl.Int, None),
+            # optional keys
+            utils.KeyInfo("last_nomination_ts", tl.Int),
+            utils.KeyInfo("last_vote_ts", tl.Int),
+            utils.KeyInfo("last_funds_ts", tl.Int),
         ],
     )
 
@@ -155,11 +159,9 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
         # vote hasn't failed yet
         globals.get("votes_against") * tl.Int(2) < globals.get("funds_current"),
         # time since nomination is in voting window
-        tl.If(
-            globals.maybe("last_nomination_ts").hasValue(),
-            timestamp - globals.get("last_nomination_ts") <= voting_duration,
-            zero,  # doesn't yet have a nomination
-        ),
+        # NOTE: can use default value because nominee check ensures
+        # `last_nomination_ts` is also set
+        timestamp - globals.get("last_nomination_ts") <= voting_duration,
     )
 
     is_state_term = tl.And(
@@ -176,13 +178,9 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
             globals.get("term_used") < globals.get("votes_for"),
         ),
         # time since nomination is in term window
-        tl.If(
-            globals.maybe("last_nomination_ts").hasValue(),
-            voting_duration
-            < timestamp - globals.get("last_nomination_ts")
-            <= voting_duration + term_duration,
-            zero,  # doesn't yet have a nomination
-        ),
+        voting_duration
+        < timestamp - globals.get("last_nomination_ts")
+        <= voting_duration + term_duration,
     )
 
     is_valid_nomination = tl.And(
