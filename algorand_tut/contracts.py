@@ -9,11 +9,9 @@ In this module, python bindigs for TEAL are used to construct TEAL expressions.
 These expressions can be compiled into TEAL programs.
 """
 
-from typing import List, NamedTuple, Tuple
-
 import pyteal as tl
-from algosdk.future import transaction
-from pyteal.ast.app import OnComplete
+
+from . import utils
 
 
 def build_periodic_payment(
@@ -107,166 +105,227 @@ def build_periodic_payment(
     return tl.And(core, tl.Or(payment, close))
 
 
-class AppPrograms(NamedTuple):
-    """Data required to build a stateful contract (app)."""
-
-    approval: tl.Expr
-    clear: tl.Expr
-    global_schema: transaction.StateSchema
-    local_schema: transaction.StateSchema
-
-
-def new_app_program(
-    on_create: tl.Expr = None,
-    on_delete: tl.Expr = None,
-    on_update: tl.Expr = None,
-    on_opt_in: tl.Expr = None,
-    on_close_out: tl.Expr = None,
-    on_clear: tl.Expr = None,
-    invokations: List[Tuple[tl.Bytes, tl.Expr]] = [],
-    global_schema: transaction.StateSchema = transaction.StateSchema(),
-    local_schema: transaction.StateSchema = transaction.StateSchema(),
-) -> AppPrograms:
+def build_distributed_treasury_app() -> utils.AppBuildInfo:
     """
-    Build the program data required for an app to execute the provided
-    expressions, with the provided storage schema.
-
-    By default, this creates an app with no storage, and which only approves
-    a cration transaction, and the delete transaction by its creator.
-
-    Of the transaction-invoked state changes (e.g. opt-in, update etc.), only
-    those with a provided expression are permitted, and only when that
-    expression returns one.
-
-    Additional state changes to the app's storage can be invoked by passing a
-    string as the first argument. In that case, if there is a corresponding
-    name in the `invokations` list, then it's expression will be evaluated, and
-    if it returns one, then any state changes carried out will be committed.
-
-    Invokations can be invoked only by accounts which have opted in.
-
-    Args:
-        on_create: expression to invoke if the application is not initialized
-        on_delete: expression to invoke for deletion
-        on_update: expression to invoke for update
-        on_opt_in: expression to invoke for opt in
-        on_close_out: expression to invoke for close out (opt out)
-        on_clear: expression to invoke for clear (forced opt out)
-        invokations: list of invokation names and corresponding expressions
-        global_schema: global storage schema
-        local_schema: local storage schema
+    Build the distributred treasury app build info.
     """
-    zero = tl.Int(0)
-    one = tl.Int(1)
-
-    # by default, allow creation
-    if on_create is None:
-        on_create = tl.Return(one)
-    # by default, allow the creator to delete the app
-    if on_delete is None:
-        on_delete = tl.Return(tl.Global.creator_address() == tl.Txn.sender())
-    if on_clear is None:
-        on_clear = tl.Return(one)
-
-    # Each branch is a tuple of expressions: one which tests if the branch
-    # should be executed, and another which is the branche's logic. If the
-    # branch logic returns 0, then the app state is unchanged, no matter what
-    # operations were performed during its exectuion (i.e. it rolls back). Only
-    # the first matched branch is executed.
-    branches = []
-
-    if on_create:
-        branches.append([tl.Txn.application_id() == zero, on_create])
-    if on_delete:
-        branches.append(
-            [tl.Txn.on_completion() == tl.OnComplete.DeleteApplication, on_delete]
-        )
-    if on_update:
-        branches.append(
-            [tl.Txn.on_completion() == tl.OnComplete.UpdateApplication, on_update]
-        )
-    if on_close_out:
-        branches.append(
-            [tl.Txn.on_completion() == tl.OnComplete.CloseOut, on_close_out]
-        )
-    if on_opt_in:
-        branches.append([tl.Txn.on_completion() == tl.OnComplete.OptIn, on_opt_in])
-    for name, expr in invokations:
-        branches.append(
-            [
-                tl.Txn.on_completion() == tl.OnComplete.NoOp
-                and tl.Txn.application_args[0] == name,
-                expr,
-            ]
-        )
-    # this is a fall-through, if no branch matched, then no matter what is
-    # requested by the transaction, deny it
-    branches.append([one, tl.Return(zero)])
-
-    return AppPrograms(
-        approval=tl.Cond(*branches),
-        clear=on_clear,
-        global_schema=global_schema,
-        local_schema=local_schema,
-    )
-
-
-def build_distributed_treasury_app() -> AppPrograms:
-    key_count = tl.Bytes("count")
 
     zero = tl.Int(0)
     one = tl.Int(1)
 
-    # fetch the global count
-    global_count = tl.App.globalGet(key_count)
-    # maybe fetch the sender count
-    sender_count_ex = tl.App.localGetEx(tl.Txn.sender(), tl.App.id(), key_count)
-    # execute the fetch, then return the feteched value or zero
-    sender_count = tl.Seq([sender_count_ex, sender_count_ex.value()])
-
-    on_create = tl.Seq(
+    globals = utils.StateBuilder(
+        utils.StateBuilder.Scope.GLOBAL,
         [
-            tl.App.globalPut(key_count, zero),
-            tl.Return(one),
-        ]
+            utils.KeyInfo("funds_current", tl.Int, zero),
+            utils.KeyInfo("funds_future", tl.Int, zero),
+            utils.KeyInfo("votes_for", tl.Int, zero),
+            utils.KeyInfo("votes_against", tl.Int, zero),
+            utils.KeyInfo("term_used", tl.Int, zero),
+            utils.KeyInfo("term_budget", tl.Int, zero),
+            utils.KeyInfo("nominee", tl.Bytes, None),
+            utils.KeyInfo("last_nomination_ts", tl.Int, None),
+        ],
     )
 
-    on_opt_in = tl.Seq(
+    locals = utils.StateBuilder(
+        utils.StateBuilder.Scope.LOCAL,
         [
-            tl.App.localPut(tl.Txn.sender(), key_count, zero),
-            tl.Return(one),
-        ]
+            utils.KeyInfo("funds_current", tl.Int, zero),
+            utils.KeyInfo("funds_future", tl.Int, zero),
+            utils.KeyInfo("votes_for", tl.Int, zero),
+            utils.KeyInfo("votes_against", tl.Int, zero),
+            utils.KeyInfo("last_nomination_ts", tl.Int, None),
+            utils.KeyInfo("last_vote_ts", tl.Int, None),
+            utils.KeyInfo("last_funds_ts", tl.Int, None),
+        ],
     )
 
-    on_close_out = tl.Seq(
-        [
-            tl.App.globalPut(key_count, global_count - sender_count),
-            tl.Return(one),
-        ]
+    cooldown = tl.Int(30)
+    voting_duration = tl.Int(30)
+    term_duration = tl.Int(60)
+
+    timestamp = tl.Global.latest_timestamp()
+
+    on_create = tl.Seq(globals.create(), tl.Return(one))
+    on_opt_in = tl.Seq(locals.create(), tl.Return(one))
+
+    is_state_voting = tl.And(
+        # there is a nominee
+        globals.maybe("nominee").hasValue(),
+        # vote hasn't failed yet
+        globals.get("votes_against") * tl.Int(2) < globals.get("funds_current"),
+        # time since nomination is in voting window
+        tl.If(
+            globals.maybe("last_nomination_ts").hasValue(),
+            timestamp - globals.get("last_nomination_ts") <= voting_duration,
+            zero,  # doesn't yet have a nomination
+        ),
     )
 
-    invokations = [
-        (
-            tl.Bytes("increment"),
+    is_state_term = tl.And(
+        tl.Not(is_state_voting),
+        # there is a nominee
+        globals.maybe("nominee").hasValue(),
+        # vote passed
+        globals.get("votes_for") * tl.Int(2) > globals.get("funds_current"),
+        # term hasn't been fully utilized
+        tl.And(
+            globals.get("term_used") < globals.get("term_budget"),
+            # further restrict term spend to votes for term, which never
+            # exceeds current funds
+            globals.get("term_used") < globals.get("votes_for"),
+        ),
+        # time since nomination is in term window
+        tl.If(
+            globals.maybe("last_nomination_ts").hasValue(),
+            voting_duration
+            < timestamp - globals.get("last_nomination_ts")
+            <= voting_duration + term_duration,
+            zero,  # doesn't yet have a nomination
+        ),
+    )
+
+    is_valid_nomination = tl.And(
+        # only accept nominations outside voting and term
+        tl.Not(is_state_voting),
+        tl.Not(is_state_term),
+        # ensure not during the account's cooldown
+        tl.If(
+            locals.maybe("last_nomination_ts").hasValue(),
+            timestamp - locals.get("last_nomination_ts") > cooldown,
+            one,  # hasn't yet nominated self, no cooldown
+        ),
+    )
+
+    # remove an account's vote (to re-cast, or when closing out)
+    remove_vote = tl.Seq(
+        tl.If(
+            # was last vote cast by this account in the current voting period
+            tl.If(
+                locals.maybe("last_vote_ts").hasValue(),
+                timestamp - locals.get("last_vote_ts") <= voting_duration,
+                zero,  # hasn't cast a vote
+            ),
+            # last cast is for current vote, so remove from global tally
             tl.Seq(
-                [
-                    tl.App.globalPut(key_count, global_count + one),
-                    tl.App.localPut(tl.Txn.sender(), key_count, sender_count + one),
-                    tl.Return(one),
-                ]
+                globals.dec("votes_for", locals.get("votes_for")),
+                globals.dec("votes_against", locals.get("votes_against")),
+            ),
+        ),
+        # clear the local vote
+        locals.set("votes_for", zero),
+        locals.set("votes_against", zero),
+    )
+
+    # shift account funds from before last nomiation to current voting period
+    update_funds = tl.Seq(
+        tl.If(
+            locals.get("last_funds_ts") < globals.get("last_nomination_ts"),
+            tl.Seq(
+                locals.inc("funds_current", locals.get("funds_future")),
+                locals.set("funds_future", zero),
             ),
         )
-    ]
+    )
 
-    global_schema = transaction.StateSchema(num_uints=1)
-    local_schema = transaction.StateSchema(num_uints=1)
+    invokations = {
+        "nominate": tl.Seq(
+            tl.Seq(globals.load_maybe(), locals.load_maybe()),
+            tl.If(
+                # verify nomination can be accepted
+                is_valid_nomination,
+                tl.Seq(
+                    # move future funds into current funds for next term
+                    globals.inc("funds_current", globals.get("funds_future")),
+                    globals.set("funds_future", zero),
+                    # clear votes and term usage from last term
+                    globals.set("votes_for", zero),
+                    globals.set("votes_against", zero),
+                    # the amount used and availbale in the next term
+                    globals.set("term_used", zero),
+                    # NOTE: budget can exceed funds, as spend will be capped to votes
+                    globals.set("term_budget", tl.Btoi(tl.Txn.application_args[1])),
+                    # setup the new nomination
+                    globals.set("nominee", tl.Txn.sender()),
+                    globals.set("last_nomination_ts", timestamp),
+                    locals.set("last_nomination_ts", timestamp),
+                    tl.Return(one),
+                ),
+            ),
+            # didn't succeed
+            tl.Return(zero),
+        ),
+        "vote_for": tl.Seq(
+            tl.Seq(globals.load_maybe(), locals.load_maybe()),
+            tl.If(
+                # verify vote can be accepted
+                is_state_voting,
+                tl.Seq(
+                    # clear previous vote
+                    remove_vote,
+                    # update current funds for vote
+                    update_funds,
+                    # add local votes to global tally
+                    globals.inc("votes_for", locals.get("funds_current")),
+                    # and track local vote as cast
+                    locals.set("votes_for", locals.get("funds_current")),
+                    tl.Return(one),
+                ),
+            ),
+            tl.Return(zero),
+        ),
+        "vote_against": tl.Seq(
+            tl.Seq(globals.load_maybe(), locals.load_maybe()),
+            tl.If(
+                # verify vote can be accepted
+                is_state_voting,
+                tl.Seq(
+                    # clear previous vote
+                    remove_vote,
+                    # update current funds for vote
+                    update_funds,
+                    # add local votes to global tally
+                    globals.inc("votes_against", locals.get("funds_current")),
+                    # and track local vote as cast
+                    locals.set("votes_against", locals.get("funds_current")),
+                    tl.Return(one),
+                ),
+            ),
+            tl.Return(zero),
+        ),
+        "add_funds": tl.Seq(
+            tl.Seq(globals.load_maybe(), locals.load_maybe()),
+            tl.Seq(
+                # add to funds available for future term
+                globals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
+                # shift local funds into current voting period if applicable
+                update_funds,
+                # add to funds for future voting period (will try to shift into
+                # current before any vote)
+                locals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
+                locals.inc("last_funds_ts", timestamp),
+                tl.Return(one),
+            ),
+        ),
+    }
 
-    return new_app_program(
+    on_close_out = tl.Seq(
+        tl.Seq(globals.load_maybe(), locals.load_maybe()),
+        tl.Seq(
+            remove_vote,
+            update_funds,
+            globals.dec("funds_current", globals.get("funds_current")),
+            globals.dec("funds_future", globals.get("funds_future")),
+            tl.Return(one),
+        ),
+    )
+
+    return utils.new_app_info(
         on_create=on_create,
         on_opt_in=on_opt_in,
         on_close_out=on_close_out,
         on_clear=on_close_out,
         invokations=invokations,
-        global_schema=global_schema,
-        local_schema=local_schema,
+        global_schema=globals.schema(),
+        local_schema=locals.schema(),
     )
