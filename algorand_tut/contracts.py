@@ -150,9 +150,6 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
 
     timestamp = tl.Global.latest_timestamp()
 
-    on_create = tl.Seq(globals.create(), tl.Return(one))
-    on_opt_in = tl.Seq(locals.create(), tl.Return(one))
-
     is_state_voting = tl.And(
         # there is a nominee
         globals.maybe("nominee").hasValue(),
@@ -226,86 +223,92 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
         )
     )
 
-    invokations = {
-        "nominate": tl.Seq(
-            tl.Seq(globals.load_maybe(), locals.load_maybe()),
-            tl.If(
-                # verify nomination can be accepted
-                is_valid_nomination,
-                tl.Seq(
-                    # move future funds into current funds for next term
-                    globals.inc("funds_current", globals.get("funds_future")),
-                    globals.set("funds_future", zero),
-                    # clear votes and term usage from last term
-                    globals.set("votes_for", zero),
-                    globals.set("votes_against", zero),
-                    # the amount used and availbale in the next term
-                    globals.set("term_used", zero),
-                    # NOTE: budget can exceed funds, as spend will be capped to votes
-                    globals.set("term_budget", tl.Btoi(tl.Txn.application_args[1])),
-                    # setup the new nomination
-                    globals.set("nominee", tl.Txn.sender()),
-                    globals.set("last_nomination_ts", timestamp),
-                    locals.set("last_nomination_ts", timestamp),
-                    tl.Return(one),
-                ),
-            ),
-            # didn't succeed
-            tl.Return(zero),
-        ),
-        "vote_for": tl.Seq(
-            tl.Seq(globals.load_maybe(), locals.load_maybe()),
-            tl.If(
-                # verify vote can be accepted
-                is_state_voting,
-                tl.Seq(
-                    # clear previous vote
-                    remove_vote,
-                    # update current funds for vote
-                    update_funds,
-                    # add local votes to global tally
-                    globals.inc("votes_for", locals.get("funds_current")),
-                    # and track local vote as cast
-                    locals.set("votes_for", locals.get("funds_current")),
-                    tl.Return(one),
-                ),
-            ),
-            tl.Return(zero),
-        ),
-        "vote_against": tl.Seq(
-            tl.Seq(globals.load_maybe(), locals.load_maybe()),
-            tl.If(
-                # verify vote can be accepted
-                is_state_voting,
-                tl.Seq(
-                    # clear previous vote
-                    remove_vote,
-                    # update current funds for vote
-                    update_funds,
-                    # add local votes to global tally
-                    globals.inc("votes_against", locals.get("funds_current")),
-                    # and track local vote as cast
-                    locals.set("votes_against", locals.get("funds_current")),
-                    tl.Return(one),
-                ),
-            ),
-            tl.Return(zero),
-        ),
-        "add_funds": tl.Seq(
-            tl.Seq(globals.load_maybe(), locals.load_maybe()),
+    invokations = {}
+
+    invokations["nominate"] = tl.Seq(
+        tl.Seq(globals.load_maybe(), locals.load_maybe()),
+        tl.If(
+            # verify nomination can be accepted
+            is_valid_nomination,
             tl.Seq(
-                # add to funds available for future term
-                globals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
-                # shift local funds into current voting period if applicable
-                update_funds,
-                # add to funds for future voting period (will try to shift into
-                # current before any vote)
-                locals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
-                locals.inc("last_funds_ts", timestamp),
+                # move future funds into current funds for next term
+                globals.inc("funds_current", globals.get("funds_future")),
+                globals.set("funds_future", zero),
+                # clear votes and term usage from last term
+                globals.set("votes_for", zero),
+                globals.set("votes_against", zero),
+                # the amount used and availbale in the next term
+                globals.set("term_used", zero),
+                # NOTE: budget can exceed funds, as spend will be capped to votes
+                globals.set("term_budget", tl.Btoi(tl.Txn.application_args[1])),
+                # setup the new nomination
+                globals.set("nominee", tl.Txn.sender()),
+                globals.set("last_nomination_ts", timestamp),
+                locals.set("last_nomination_ts", timestamp),
                 tl.Return(one),
             ),
         ),
-    }
+        # didn't succeed
+        tl.Return(zero),
+    )
+
+    invokations["vote_for"] = tl.Seq(
+        tl.Seq(globals.load_maybe(), locals.load_maybe()),
+        tl.If(
+            # verify vote can be accepted
+            is_state_voting,
+            tl.Seq(
+                # clear previous vote
+                remove_vote,
+                # update current funds for vote
+                update_funds,
+                # add local votes to global tally
+                globals.inc("votes_for", locals.get("funds_current")),
+                # and track local vote as cast
+                locals.set("votes_for", locals.get("funds_current")),
+                tl.Return(one),
+            ),
+        ),
+        tl.Return(zero),
+    )
+
+    invokations["vote_against"] = tl.Seq(
+        tl.Seq(globals.load_maybe(), locals.load_maybe()),
+        tl.If(
+            # verify vote can be accepted
+            is_state_voting,
+            tl.Seq(
+                # clear previous vote
+                remove_vote,
+                # update current funds for vote
+                update_funds,
+                # add local votes to global tally
+                globals.inc("votes_against", locals.get("funds_current")),
+                # and track local vote as cast
+                locals.set("votes_against", locals.get("funds_current")),
+                tl.Return(one),
+            ),
+        ),
+        tl.Return(zero),
+    )
+
+    invokations["add_funds"] = tl.Seq(
+        tl.Seq(globals.load_maybe(), locals.load_maybe()),
+        tl.Seq(
+            # add to funds available for future term
+            globals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
+            # shift local funds into current voting period if applicable
+            update_funds,
+            # add to funds for future voting period (will try to shift into
+            # current before any vote)
+            locals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
+            locals.inc("last_funds_ts", timestamp),
+            tl.Return(one),
+        ),
+    )
+
+    on_create = tl.Seq(globals.create(), tl.Return(one))
+    on_opt_in = tl.Seq(locals.create(), tl.Return(one))
 
     on_close_out = tl.Seq(
         tl.Seq(globals.load_maybe(), locals.load_maybe()),
