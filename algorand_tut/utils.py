@@ -192,6 +192,13 @@ def fund_from_genesis(
     return private_key, address
 
 
+def group_txns(*txns: transaction.Transaction) -> List[transaction.Transaction]:
+    gid = transaction.calculate_group_id(txns)
+    for txn in txns:
+        txn.group = gid
+    return txns
+
+
 class AppBuildInfo(NamedTuple):
     """Data required to build a stateful contract (app)."""
 

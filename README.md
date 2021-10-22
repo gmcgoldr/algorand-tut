@@ -1,5 +1,8 @@
 # An Algorand Tutorial
 
+NOTE: all code in this respository is experiemental at best.
+It is largely untested and should not be used in its current state.
+
 This is part tutorial, part exploration of the Alogrand developer experience.
 This code base started out with the objective:
 learn enough Algorand tooling and APIs to write a smart contract with voting mechanics,
@@ -19,7 +22,7 @@ In its current form, here's what the tutorial will walk you through:
 2. Create a private Algorand network and run a node
 3. Setup accounts and make transfers using CLIs and the Python SDK
 4. Write a periodic payment contract
-5. ~~Write a distributed treasury contract with voting~~
+5. Write a distributed treasury contract with voting
 
 All steps are code are tested on Ubuntu 20.04 running in WSL2,
 with `python` 3.8,
@@ -313,7 +316,7 @@ and will either take effect or not depending on its return value.
 If the program returns false,
 the state changes made during the program execution are not confirmed by the network.
 However,
-the `ClearState` transaction will take effect no matter the return code.
+the `ClearState` transaction will clear the account's local state regardless of return code.
 
 NOTE: "program" here is used to describe the logic tied to the contract.
 But in fact there are two separate programs tied to a stateful contract:
@@ -344,43 +347,26 @@ Requirements for the demo:
   new nominations are not accepted for some duration (the mandate).
 - After a failed vote,
   the nominee cannot nominate themselves for some duration (cooldown).
-- The treasurer can spend funds up to the proposed budget.
+- The treasurer can spend funds up to the proposed budget,
+  or the number of votes received, whichever is smaller.
 
 Lacking functionality:
 
 - Voting on new memberships
 - Voting on contract closure
-- Unilateral contact exits
+- Unilateral contact exits with refund
 - Initial configuration (e.g. pre-approved accounts, min funds to start)
 
 Approach:
 
-- A stateful contract will track:
-  - phase: accepting nomination, accepting votes
-  - current treasurer
-  - current budget
-  - nominated treasurer
-  - proposed budget
-  - tallied votes for nomiation
-- A stateless contract will hold the funds.
-- The stateless contract will approve transactions from the treasurer,
-  up to the current budget.
-- Communication between the two contracts will be done in the scratch space.
-- To spend,
-  the treasurer will submit a group of:
-  a transaction to the stateful contract seeking approval,
-  the payment transaction from the statless contract.
-- The stateful contract will verify that the treasurer is allowed to spend the amount in the payment transaction,
-  and write the result in the scratch space.
-- The stateless contract will ensure that it is the 2nd in a group of two transactions,
-  the first being the stateful contract,
-  and will read the approval from the scratch space.
-
-The communcation could also be done using an ASA,
-but this introduces many other state transitions
-(all standard functions related to ASAs).
-While these can be managed,
-it would appear to increase the risk of misconfiguration.
+- The app is used as an escrow account,
+  holding funds from members which can be released to the treasurer.
+- The app recognizes added funds based on a grouped transaction,
+  which it inspects to discover the amount funded.
+- Grouped transactions can communicate through success / failure:
+  if the funding transaction fails,
+  then the group is not executed,
+  so the app state is unchanged.
 
 ## Terminology
 

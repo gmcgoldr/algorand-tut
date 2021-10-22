@@ -9,6 +9,7 @@ from typing import Dict, List
 
 import algosdk as ag
 from algosdk.future import transaction
+from algosdk.future.transaction import PaymentTxn
 from algosdk.v2client.algod import AlgodClient
 
 from algorand_tut import contracts, utils
@@ -53,7 +54,9 @@ def extract_state_value(value: Dict):
         return value.get("uint", None)
 
 
-def print_state(algod_client: AlgodClient, app_id: int, addresses: List[str]):
+def print_state(
+    algod_client: AlgodClient, app_id: int, app_address: str, addresses: List[str]
+):
     """
     Print the app's global data, and local data for `addressses`.
     """
@@ -82,6 +85,12 @@ def print_state(algod_client: AlgodClient, app_id: int, addresses: List[str]):
         value = get_app_global_key(algod_client, app_id, key)
         value = extract_state_value(value)
         print(f"{key}: {value}")
+    info = algod_client.account_info(app_address)
+    print(
+        "balance: {:.6f} Algos".format(
+            ag.util.microalgos_to_algos(info.get("amount", 0))
+        )
+    )
 
     for address in addresses:
         print(f"\nAccount {address[:8]}:")
@@ -89,6 +98,12 @@ def print_state(algod_client: AlgodClient, app_id: int, addresses: List[str]):
             value = get_app_local_key(algod_client, app_id, address, key)
             value = extract_state_value(value)
             print(f"{key}: {value}")
+        info = algod_client.account_info(address)
+        print(
+            "balance: {:.6f} Algos".format(
+                ag.util.microalgos_to_algos(info.get("amount", 0))
+            )
+        )
 
     print()
 
@@ -101,10 +116,10 @@ def main(node_data_dir: Path):
 
     print("Funding accounts ...")
     account1_private_key, account1_address = utils.fund_from_genesis(
-        algod_client, kmd_client, ag.util.algos_to_microalgos(10)
+        algod_client, kmd_client, ag.util.algos_to_microalgos(100)
     )
     account2_private_key, account2_address = utils.fund_from_genesis(
-        algod_client, kmd_client, ag.util.algos_to_microalgos(10)
+        algod_client, kmd_client, ag.util.algos_to_microalgos(100)
     )
 
     print("Building app ...")
@@ -117,12 +132,16 @@ def main(node_data_dir: Path):
     # thet the id of the created app, this is effectively the app's address,
     # as this is where app state change transactions are sent
     app_id = result["application-index"]
-    print(f"App ID: {app_id}")
+    # TODO: move to utils
+    app_address = ag.encoding.encode_address(
+        ag.encoding.checksum(b"appID" + app_id.to_bytes(8, "big"))
+    )
+    print(f"App: {app_id}, {app_address}")
     # the app's id can also be found in the creating account's info
     account_info = algod_client.account_info(account1_address)
     created_app_ids = [a["id"] for a in account_info["created-apps"]]
     assert app_id in created_app_ids
-    print_state(algod_client, app_id, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 
     print("Opting into contract ...")
     params = algod_client.suggested_params()
@@ -133,22 +152,34 @@ def main(node_data_dir: Path):
     txn = transaction.ApplicationOptInTxn(account2_address, params, app_id)
     txid = algod_client.send_transaction(txn.sign(account2_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 
     print("Adding funds ...")
     params = algod_client.suggested_params()
     params.fee = 0
-    txn = transaction.ApplicationNoOpTxn(
-        account1_address, params, app_id, ["add_funds".encode("utf8"), 10]
+    txns = utils.group_txns(
+        PaymentTxn(
+            account1_address, params, app_address, ag.util.algos_to_microalgos(10)
+        ),
+        transaction.ApplicationNoOpTxn(
+            account1_address, params, app_id, ["add_funds".encode("utf8")]
+        ),
     )
-    txid = algod_client.send_transaction(txn.sign(account1_private_key))
+    txns = [t.sign(account1_private_key) for t in txns]
+    txid = algod_client.send_transactions(txns)
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    txn = transaction.ApplicationNoOpTxn(
-        account2_address, params, app_id, ["add_funds".encode("utf8"), 5]
+    txns = utils.group_txns(
+        PaymentTxn(
+            account2_address, params, app_address, ag.util.algos_to_microalgos(5)
+        ),
+        transaction.ApplicationNoOpTxn(
+            account2_address, params, app_id, ["add_funds".encode("utf8")]
+        ),
     )
-    txid = algod_client.send_transaction(txn.sign(account2_private_key))
+    txns = [t.sign(account2_private_key) for t in txns]
+    txid = algod_client.send_transactions(txns)
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 
     print("Nominating ...")
     params = algod_client.suggested_params()
@@ -158,7 +189,7 @@ def main(node_data_dir: Path):
     )
     txid = algod_client.send_transaction(txn.sign(account1_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 
     print("Voting ...")
     params = algod_client.suggested_params()
@@ -173,7 +204,7 @@ def main(node_data_dir: Path):
     )
     txid = algod_client.send_transaction(txn.sign(account2_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 
     # TODO: is it possible to make multiple transactions with the same app
     # in the same block? Hopefully not ...

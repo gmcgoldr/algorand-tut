@@ -151,11 +151,34 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
         ],
     )
 
+    # according to docs, this is the exact method in which the application
+    # address is calcualted: it is the SHA512 hash, with digest size 256, of
+    # the bytes "appID" and the 8-byte big-endian encoding of the app id
+    # TODO: hopefully this gets added to the globals eventually so it can be
+    # looked up cheaply, because this is expensive
+    app_address = tl.Sha512_256(tl.Concat(tl.Bytes("appID"), tl.Itob(tl.App.id())))
+
     cooldown = tl.Int(30)
     voting_duration = tl.Int(30)
     term_duration = tl.Int(60)
 
     timestamp = tl.Global.latest_timestamp()
+
+    # the amount funded to the contract if it the app is the in a pair of
+    # transactions, with the 1st paying the app
+    fund_txn: tl.Txn = tl.Gtxn[0]
+    amount_funded = tl.Seq(
+        tl.If(
+            tl.And(
+                tl.Global.group_size() == tl.Int(2),
+                tl.Txn.group_index() == tl.Int(1),
+                fund_txn.type_enum() == tl.TxnType.Payment,
+                fund_txn.receiver() == app_address,
+            ),
+            fund_txn.amount(),
+            zero,
+        )
+    )
 
     is_state_voting = tl.And(
         # there is a nominee
@@ -233,6 +256,8 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
     invokations = {}
 
     invokations["nominate"] = tl.Seq(
+        # TODO: verify if no-op can be called when not opt-in
+        # tl.If(tl.Not(tl.App.optedIn()), tl.Return(zero)),
         tl.Seq(globals.load_maybe(), locals.load_maybe()),
         tl.If(
             # verify nomination can be accepted
@@ -303,16 +328,20 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
         tl.Seq(globals.load_maybe(), locals.load_maybe()),
         tl.Seq(
             # add to funds available for future term
-            globals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
+            globals.inc("funds_future", amount_funded),
             # shift local funds into current voting period if applicable
             update_funds,
             # add to funds for future voting period (will try to shift into
             # current before any vote)
-            locals.inc("funds_future", tl.Btoi(tl.Txn.application_args[1])),
+            locals.inc("funds_future", amount_funded),
             locals.inc("last_funds_ts", timestamp),
             tl.Return(one),
         ),
     )
+
+    # TODO: extract funds during term
+    # TODO: extract additional funds (un-tracked payments) during term?
+    # TODO: vouching system for account approval on opt-in
 
     on_create = tl.Seq(globals.create(), tl.Return(one))
     on_opt_in = tl.Seq(locals.create(), tl.Return(one))
