@@ -240,7 +240,7 @@ More:
 A TEAL program compiled in "signature" mode is stateless.
 Its inputs are the transaction fields,
 some globl fields,
-and optional invokation arguments.
+optional invokation arguments.
 It signs or does not sign a transaction depending on the result of its logic.
 
 Consider that the ledger represents some state
@@ -250,6 +250,11 @@ and a contract defines some allowed state transitions
 A node sends a request for some state transition
 (a transaction),
 and the validators use the contract to validate the transition.
+
+Another way to think of smart signatures is to consider them as a template:
+they specify the state of transactions to approve (e.g. the sender, receiver,
+amount etc.). Those transactions which match the template are approved, while
+others are rejected.
 
 A contract can be used as a "contract account" or a "delegate signature".
 More: <https://developer.algorand.org/docs/features/asc1/stateless/modes/>
@@ -283,6 +288,8 @@ However, a statelss contract:
 - has some state which is tracked on the ledger
 - does not approve a sepending transaction,
   but rather approves arbitrary state changes to its own state
+- can be used to approve / deny a group of transactions
+- can execute internal transactions, such as issuing payments
 
 Both are evaluating whether or not some state change should be applied.
 In a stateless contract,
