@@ -283,8 +283,7 @@ def new_app_info(
     # by default, allow the creator to delete the app
     if on_delete is None:
         on_delete = tl.Return(tl.Global.creator_address() == tl.Txn.sender())
-    # if no clear is provided, simply return one which has no effect as clear
-    # must always execute regardless of return value
+    # by default, clear succeeds
     if on_clear is None:
         on_clear = tl.Return(one)
 
@@ -348,9 +347,8 @@ class KeyInfo(NamedTuple):
 
     It is up to the app program to:
     1) use `StateBuilder.create` to create the keys when an app is constructed,
-       or use an expression which will create all keys with `init`.
     2) use `StateBuilder.load_maybe` to store `MaybeValue` keys before
-       accessing their values, or use an equivalent expression.
+       accessing their values
     """
 
     key: str
@@ -374,6 +372,11 @@ class StateBuilder:
     ):
         """
         Prepare a collection of state keys for some scope.
+
+        Keys with an `init` field will be treated as optional, meaning that
+        they can be accessed with the `maybe` method, and will not be set in
+        the `create` method. In order to access their values they must first
+        be loaded into slots using the `load_maybe` method.
 
         The `scope` can be either `Scope.GLOBAL` or `Scope.LOCAL`. For a local
         scope, this will interact with keys of the current transaction sender,

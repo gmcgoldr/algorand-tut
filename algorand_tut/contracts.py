@@ -26,6 +26,13 @@ def build_periodic_payment(
     """
     Builds a TEAL expression for recurring payments.
 
+    This is a smart signature, a statless contract. It can be thought of as a
+    template where transactions matching the template are approved, and others
+    are denied.
+
+    In other words, the account which signed this contract effectively signed
+    any transaction which matches this template.
+
     Args:
         max_fee: don't allow transactions with fees above this
         start_round: start allowing payments at this round
