@@ -4,6 +4,7 @@ payments.
 """
 
 import base64
+import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -112,7 +113,13 @@ def main(node_data_dir: Path):
     algod_client = utils.build_algod_client(node_data_dir)
     kmd_client = utils.build_kmd_client(node_data_dir)
 
-    app = contracts.build_distributed_treasury_app()
+    voting_duration = 30
+    term_duration = 30
+    cooldown = 10
+
+    app = contracts.build_distributed_treasury_app(
+        voting_duration=voting_duration, term_duration=term_duration, cooldown=cooldown
+    )
 
     print("Funding accounts ...")
     account1_private_key, account1_address = utils.fund_from_genesis(
@@ -185,10 +192,14 @@ def main(node_data_dir: Path):
     params = algod_client.suggested_params()
     params.fee = 0
     txn = transaction.ApplicationNoOpTxn(
-        account1_address, params, app_id, ["nominate".encode("utf8"), 20]
+        account1_address,
+        params,
+        app_id,
+        ["nominate".encode("utf8"), ag.util.algos_to_microalgos(15)],
     )
     txid = algod_client.send_transaction(txn.sign(account1_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
+    voting_end = time.time() + voting_duration
     print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 
     print("Voting ...")
@@ -203,6 +214,22 @@ def main(node_data_dir: Path):
         account2_address, params, app_id, ["vote_against".encode("utf8")]
     )
     txid = algod_client.send_transaction(txn.sign(account2_private_key))
+    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
+    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+
+    print("Waiting for voting to end ...")
+    time.sleep(max(0, voting_end - time.time()))
+
+    print("Windrawing ...")
+    params = algod_client.suggested_params()
+    params.fee = 0
+    txn = transaction.ApplicationNoOpTxn(
+        account1_address,
+        params,
+        app_id,
+        ["withdraw_funds".encode("utf8"), ag.util.algos_to_microalgos(10)],
+    )
+    txid = algod_client.send_transaction(txn.sign(account1_private_key))
     _ = utils.get_confirmed_transaction(algod_client, txid, 5)
     print_state(algod_client, app_id, app_address, [account1_address, account2_address])
 

@@ -112,7 +112,11 @@ def build_periodic_payment(
     return tl.And(core, tl.Or(payment, close))
 
 
-def build_distributed_treasury_app() -> utils.AppBuildInfo:
+def build_distributed_treasury_app(
+    voting_duration: int,
+    term_duration: int,
+    cooldown: int,
+) -> utils.AppBuildInfo:
     """
     Build the distributred treasury app build info.
     """
@@ -151,16 +155,11 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
         ],
     )
 
-    # according to docs, this is the exact method in which the application
-    # address is calcualted: it is the SHA512 hash, with digest size 256, of
-    # the bytes "appID" and the 8-byte big-endian encoding of the app id
-    # TODO: hopefully this gets added to the globals eventually so it can be
-    # looked up cheaply, because this is expensive
-    app_address = tl.Sha512_256(tl.Concat(tl.Bytes("appID"), tl.Itob(tl.App.id())))
+    app_address = tl.Global.current_application_address()
 
-    cooldown = tl.Int(30)
-    voting_duration = tl.Int(30)
-    term_duration = tl.Int(60)
+    cooldown = tl.Int(cooldown)
+    voting_duration = tl.Int(voting_duration)
+    term_duration = tl.Int(term_duration)
 
     timestamp = tl.Global.latest_timestamp()
 
@@ -219,6 +218,20 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
             locals.maybe("last_nomination_ts").hasValue(),
             timestamp - locals.get("last_nomination_ts") > cooldown,
             one,  # hasn't yet nominated self, no cooldown
+        ),
+    )
+
+    withdrawl_amount = tl.Btoi(tl.Txn.application_args[1])
+    is_valid_withdrawl = tl.And(
+        is_state_term,
+        tl.Txn.sender() == globals.get("nominee"),
+        tl.Le(
+            withdrawl_amount,
+            tl.If(
+                globals.get("term_budget") <= globals.get("votes_for"),
+                globals.get("term_budget") - globals.get("term_used"),
+                globals.get("votes_for") - globals.get("term_used"),
+            ),
         ),
     )
 
@@ -339,8 +352,29 @@ def build_distributed_treasury_app() -> utils.AppBuildInfo:
         ),
     )
 
-    # TODO: extract funds during term
-    # TODO: extract additional funds (un-tracked payments) during term?
+    invokations["withdraw_funds"] = tl.Seq(
+        tl.Seq(globals.load_maybe(), locals.load_maybe()),
+        # ensure the state is in term and the sender is the nominee
+        tl.If(
+            is_valid_withdrawl,
+            tl.Seq(
+                # sumbit an internal trasaction to the nominee for the amount
+                tl.InnerTxnBuilder.Begin(),
+                tl.InnerTxnBuilder.SetField(tl.TxnField.type_enum, tl.TxnType.Payment),
+                tl.InnerTxnBuilder.SetField(
+                    tl.TxnField.receiver, globals.get("nominee")
+                ),
+                tl.InnerTxnBuilder.SetField(tl.TxnField.amount, withdrawl_amount),
+                tl.InnerTxnBuilder.Submit(),
+                # increment the used funds in this term
+                globals.inc("term_used", withdrawl_amount),
+                tl.Return(one),
+            ),
+        ),
+        tl.Return(zero),
+    )
+
+    # TODO: check for excees funds and credit them to accounts
     # TODO: vouching system for account approval on opt-in
 
     on_create = tl.Seq(globals.create(), tl.Return(one))
