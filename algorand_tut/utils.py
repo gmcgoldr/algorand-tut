@@ -249,7 +249,7 @@ def new_app_info(
     on_opt_in: tl.Expr = None,
     on_close_out: tl.Expr = None,
     on_clear: tl.Expr = None,
-    invokations: Dict[str, tl.Expr] = [],
+    invokations: Dict[str, tl.Expr] = None,
     global_schema: transaction.StateSchema = transaction.StateSchema(),
     local_schema: transaction.StateSchema = transaction.StateSchema(),
 ) -> AppBuildInfo:
@@ -300,6 +300,7 @@ def new_app_info(
     # operations were performed during its exectuion (i.e. it rolls back). Only
     # the first matched branch is executed.
     branches = []
+    invokations = {} if invokations is None else invokations
 
     if on_create:
         # TODO: check no-op
