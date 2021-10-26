@@ -69,35 +69,53 @@ def get_wallet_handle(client: KMDClient, wallet_id: str, password: str) -> str:
     client.release_wallet_handle(handle)
 
 
-def get_confirmed_transaction(
-    client: AlgodClient, transaction_id: int, timeout_blocks: int
+def get_confirmed_transactions(
+    client: AlgodClient, transaction_ids: List[int], timeout_blocks: int
 ) -> Dict:
     """
-    Wait for the network to confirm a transaction and return its information.
+    Wait for the network to confirm a transactions and return their
+    information.
 
     Args:
         client: the client connected to the node
-        transaction_id: the transaction id
+        transaction_ids: list of transactions for which to retreive info
         timeout: raise an error if no confirmation is received after this
             many blocks
     """
     start_round = client.status()["last-round"] + 1
     current_round = start_round
+    waiting_ids = set(transaction_ids)
+    confirmed = []
 
-    while current_round < start_round + timeout_blocks:
-        # get the transaction status and return if confirmed
-        pending_txn = client.pending_transaction_info(transaction_id)
-
-        if pending_txn.get("confirmed-round", 0) > 0:
-            return pending_txn
-        elif pending_txn["pool-error"]:
-            raise RuntimeError(pending_txn["pool_error"])
-
+    while waiting_ids and current_round < start_round + timeout_blocks:
+        for transaction_id in list(waiting_ids):
+            # NOTE: documentation suggests that transactions are "remembered"
+            # by a node for some time after confirmation, but doesn't specify
+            # how long
+            pending_txn = client.pending_transaction_info(transaction_id)
+            if pending_txn["pool-error"]:
+                waiting_ids.remove(transaction_id)
+            elif pending_txn.get("confirmed-round", 0) > 0:
+                confirmed.append(pending_txn)
+                waiting_ids.remove(transaction_id)
         # wait until the end of this block
         client.status_after_block(current_round)
         current_round += 1
 
-    raise RuntimeError(f"no confirmation after {timeout_blocks} blocks")
+    return confirmed
+
+
+def get_confirmed_transaction(
+    client: AlgodClient, transaction_id: int, timeout_blocks: int
+) -> Dict:
+    """
+    See `get_confirmed_transactions`, but for a single transaction id.
+    """
+    confirmed = get_confirmed_transactions(client, [transaction_id], timeout_blocks)
+    if confirmed:
+        return confirmed[0]
+    else:
+        return None
 
 
 def compile_teal_source(source: str) -> bytes:
@@ -149,9 +167,14 @@ def fix_lease_size(lease: bytes) -> bytes:
     return lease
 
 
+class AccountInfo(NamedTuple):
+    key: str
+    address: str
+
+
 def fund_from_genesis(
     algod_client: AlgodClient, kmd_client: KMDClient, amount: int
-) -> Tuple[str, str]:
+) -> Tuple[AccountInfo, str]:
     """
     Create a new account and fund it from the account that received the gensis
     funds.
@@ -176,7 +199,7 @@ def fund_from_genesis(
             raise RuntimeError("funded account not found in wallet")
         sender_address = keys[0]
 
-    private_key, address = ag.account.generate_account()
+    key, address = ag.account.generate_account()
 
     # Transfer algos to the escrow account
     params = algod_client.suggested_params()
@@ -186,10 +209,8 @@ def fund_from_genesis(
     with get_wallet_handle(kmd_client, wallet_id, "") as handle:
         txn = kmd_client.sign_transaction(handle, "", txn)
     txid = algod_client.send_transaction(txn)
-    # wait for the transaction to go through
-    get_confirmed_transaction(algod_client, txid, 5)
 
-    return private_key, address
+    return AccountInfo(key, address), txid
 
 
 def group_txns(*txns: transaction.Transaction) -> List[transaction.Transaction]:

@@ -112,6 +112,7 @@ def print_state(
 def main(node_data_dir: Path):
     algod_client = utils.build_algod_client(node_data_dir)
     kmd_client = utils.build_kmd_client(node_data_dir)
+    wait_blocks = 5
 
     voting_duration = 30
     term_duration = 30
@@ -122,20 +123,28 @@ def main(node_data_dir: Path):
     )
 
     print("Funding accounts ...")
-    account1_private_key, account1_address = utils.fund_from_genesis(
-        algod_client, kmd_client, ag.util.algos_to_microalgos(100)
+    account1, txid1 = utils.fund_from_genesis(
+        algod_client,
+        kmd_client,
+        ag.util.algos_to_microalgos(100),
     )
-    account2_private_key, account2_address = utils.fund_from_genesis(
-        algod_client, kmd_client, ag.util.algos_to_microalgos(100)
+    account2, txid2 = utils.fund_from_genesis(
+        algod_client,
+        kmd_client,
+        ag.util.algos_to_microalgos(100),
+    )
+    assert (
+        len(utils.get_confirmed_transactions(algod_client, [txid1, txid2], wait_blocks))
+        == 2
     )
 
     print("Building app ...")
     params = algod_client.suggested_params()
     params.fee = 0  # use the minimum network fee
     # compile the programs and package into app creation txn
-    txn = utils.build_app_from_info(app, account1_address, params)
-    txid = algod_client.send_transaction(txn.sign(account1_private_key))
-    result = utils.get_confirmed_transaction(algod_client, txid, 5)
+    txn = utils.build_app_from_info(app, account1.address, params)
+    txid = algod_client.send_transaction(txn.sign(account1.key))
+    result = utils.get_confirmed_transaction(algod_client, txid, wait_blocks)
     # thet the id of the created app, this is effectively the app's address,
     # as this is where app state change transactions are sent
     app_id = result["application-index"]
@@ -145,77 +154,83 @@ def main(node_data_dir: Path):
     )
     print(f"App: {app_id}, {app_address}")
     # the app's id can also be found in the creating account's info
-    account_info = algod_client.account_info(account1_address)
+    account_info = algod_client.account_info(account1.address)
     created_app_ids = [a["id"] for a in account_info["created-apps"]]
     assert app_id in created_app_ids
-    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1.address, account2.address])
 
     print("Opting into contract ...")
     params = algod_client.suggested_params()
     params.fee = 0
-    txn = transaction.ApplicationOptInTxn(account1_address, params, app_id)
-    txid = algod_client.send_transaction(txn.sign(account1_private_key))
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    txn = transaction.ApplicationOptInTxn(account2_address, params, app_id)
-    txid = algod_client.send_transaction(txn.sign(account2_private_key))
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+    txn = transaction.ApplicationOptInTxn(account1.address, params, app_id)
+    txid1 = algod_client.send_transaction(txn.sign(account1.key))
+    txn = transaction.ApplicationOptInTxn(account2.address, params, app_id)
+    txid2 = algod_client.send_transaction(txn.sign(account2.key))
+    assert (
+        len(utils.get_confirmed_transactions(algod_client, [txid1, txid2], wait_blocks))
+        == 2
+    )
+    print_state(algod_client, app_id, app_address, [account1.address, account2.address])
 
     print("Adding funds ...")
     params = algod_client.suggested_params()
     params.fee = 0
     txns = utils.group_txns(
         PaymentTxn(
-            account1_address, params, app_address, ag.util.algos_to_microalgos(10)
+            account1.address, params, app_address, ag.util.algos_to_microalgos(10)
         ),
         transaction.ApplicationNoOpTxn(
-            account1_address, params, app_id, ["add_funds".encode("utf8")]
+            account1.address, params, app_id, ["add_funds".encode("utf8")]
         ),
     )
-    txns = [t.sign(account1_private_key) for t in txns]
-    txid = algod_client.send_transactions(txns)
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
+    txns = [t.sign(account1.key) for t in txns]
+    txid1 = algod_client.send_transactions(txns)
     txns = utils.group_txns(
         PaymentTxn(
-            account2_address, params, app_address, ag.util.algos_to_microalgos(5)
+            account2.address, params, app_address, ag.util.algos_to_microalgos(5)
         ),
         transaction.ApplicationNoOpTxn(
-            account2_address, params, app_id, ["add_funds".encode("utf8")]
+            account2.address, params, app_id, ["add_funds".encode("utf8")]
         ),
     )
-    txns = [t.sign(account2_private_key) for t in txns]
-    txid = algod_client.send_transactions(txns)
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+    txns = [t.sign(account2.key) for t in txns]
+    txid2 = algod_client.send_transactions(txns)
+    assert (
+        len(utils.get_confirmed_transactions(algod_client, [txid1, txid2], wait_blocks))
+        == 2
+    )
+    print_state(algod_client, app_id, app_address, [account1.address, account2.address])
 
     print("Nominating ...")
     params = algod_client.suggested_params()
     params.fee = 0
     txn = transaction.ApplicationNoOpTxn(
-        account1_address,
+        account1.address,
         params,
         app_id,
         ["nominate".encode("utf8"), ag.util.algos_to_microalgos(15)],
     )
-    txid = algod_client.send_transaction(txn.sign(account1_private_key))
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
+    txid = algod_client.send_transaction(txn.sign(account1.key))
+    assert utils.get_confirmed_transaction(algod_client, txid, wait_blocks)
     voting_end = time.time() + voting_duration
-    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+    print_state(algod_client, app_id, app_address, [account1.address, account2.address])
 
     print("Voting ...")
     params = algod_client.suggested_params()
     params.fee = 0
     txn = transaction.ApplicationNoOpTxn(
-        account1_address, params, app_id, ["vote_for".encode("utf8")]
+        account1.address, params, app_id, ["vote_for".encode("utf8")]
     )
-    txid = algod_client.send_transaction(txn.sign(account1_private_key))
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
+    txid1 = algod_client.send_transaction(txn.sign(account1.key))
     txn = transaction.ApplicationNoOpTxn(
-        account2_address, params, app_id, ["vote_against".encode("utf8")]
+        account2.address, params, app_id, ["vote_against".encode("utf8")]
     )
-    txid = algod_client.send_transaction(txn.sign(account2_private_key))
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+    txid2 = algod_client.send_transaction(txn.sign(account2.key))
+    assert (
+        len(utils.get_confirmed_transactions(algod_client, [txid1, txid2], wait_blocks))
+        == 2
+    )
+    print_state(algod_client, app_id, app_address, [account1.address, account2.address])
 
     print("Waiting for voting to end ...")
     time.sleep(max(0, voting_end - time.time()))
@@ -224,14 +239,14 @@ def main(node_data_dir: Path):
     params = algod_client.suggested_params()
     params.fee = 0
     txn = transaction.ApplicationNoOpTxn(
-        account1_address,
+        account1.address,
         params,
         app_id,
         ["withdraw_funds".encode("utf8"), ag.util.algos_to_microalgos(10)],
     )
-    txid = algod_client.send_transaction(txn.sign(account1_private_key))
-    _ = utils.get_confirmed_transaction(algod_client, txid, 5)
-    print_state(algod_client, app_id, app_address, [account1_address, account2_address])
+    txid = algod_client.send_transaction(txn.sign(account1.key))
+    assert utils.get_confirmed_transaction(algod_client, txid, wait_blocks)
+    print_state(algod_client, app_id, app_address, [account1.address, account2.address])
 
     # TODO: is it possible to make multiple transactions with the same app
     # in the same block? Hopefully not ...

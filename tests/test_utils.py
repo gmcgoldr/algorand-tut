@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import NamedTuple, List
+from typing import List, NamedTuple
 from unittest.mock import Mock
 
 import algosdk as ag

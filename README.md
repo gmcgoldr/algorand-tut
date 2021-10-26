@@ -21,8 +21,7 @@ In its current form, here's what the tutorial will walk you through:
 1. Install the Algorand networking and dev tools
 2. Create a private Algorand network and run a node
 3. Setup accounts and make transfers using CLIs and the Python SDK
-4. Write a periodic payment contract
-5. Write a distributed treasury contract with voting
+4. Write a distributed treasury contract with voting
 
 All steps are code are tested on Ubuntu 20.04 running in WSL2,
 with `python` 3.8,
@@ -270,13 +269,6 @@ Transactions can be submitted to the network without the sender signature,
 but with the contract in its stead.
 If the contract evalutes to true on the transaction,
 the network confirms it.
-
-Run the demo:
-
-```bash
-sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary
-sudo -u algorand python3 contract-periodic.py /var/lib/algorand/net1/Primary --use_delegate
-```
 
 ### Smart contract (stateful)
 
