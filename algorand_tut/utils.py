@@ -213,6 +213,21 @@ def fund_from_genesis(
     return AccountInfo(key, address), txid
 
 
+class AppInfo(NamedTuple):
+    app_id: str
+    address: str
+
+
+def build_app_info_from_result(result: Dict) -> AppInfo:
+    app_id = result.get("application-index", None)
+    if app_id is None:
+        return None
+    address = ag.encoding.encode_address(
+        ag.encoding.checksum(b"appID" + app_id.to_bytes(8, "big"))
+    )
+    return AppInfo(app_id=app_id, address=address)
+
+
 def group_txns(*txns: transaction.Transaction) -> List[transaction.Transaction]:
     gid = transaction.calculate_group_id(txns)
     for txn in txns:
@@ -229,7 +244,7 @@ class AppBuildInfo(NamedTuple):
     local_schema: transaction.StateSchema
 
 
-def build_app_from_info(
+def build_app_from_build_info(
     info: AppBuildInfo, address: str, params: transaction.SuggestedParams
 ) -> transaction.ApplicationCreateTxn:
     """
@@ -264,22 +279,19 @@ def build_app_from_info(
 
 
 def new_app_info(
-    on_create: tl.Expr = None,
-    on_delete: tl.Expr = None,
-    on_update: tl.Expr = None,
-    on_opt_in: tl.Expr = None,
-    on_close_out: tl.Expr = None,
-    on_clear: tl.Expr = None,
-    invokations: Dict[str, tl.Expr] = None,
-    global_schema: transaction.StateSchema = transaction.StateSchema(),
-    local_schema: transaction.StateSchema = transaction.StateSchema(),
+    on_create: tl.Expr,
+    on_delete: tl.Expr,
+    on_update: tl.Expr,
+    on_opt_in: tl.Expr,
+    on_close_out: tl.Expr,
+    on_clear: tl.Expr,
+    invokations: Dict[str, tl.Expr],
+    global_schema: transaction.StateSchema,
+    local_schema: transaction.StateSchema,
 ) -> AppBuildInfo:
     """
     Build the program data required for an app to execute the provided
     expressions, with the provided storage schema.
-
-    By default, this creates an app with no storage, and which only approves
-    a cration transaction, and the delete transaction by its creator.
 
     Of the transaction-invoked state changes (e.g. opt-in, update etc.), only
     those with a provided expression are permitted, and only when that
@@ -305,26 +317,15 @@ def new_app_info(
     zero = tl.Int(0)
     one = tl.Int(1)
 
-    # by default, allow creation
-    if on_create is None:
-        on_create = tl.Return(one)
-    # by default, allow the creator to delete the app
-    if on_delete is None:
-        on_delete = tl.Return(tl.Global.creator_address() == tl.Txn.sender())
-    # by default, clear succeeds
-    if on_clear is None:
-        on_clear = tl.Return(one)
-
     # Each branch is a pair of expressions: one which tests if the branch
     # should be executed, and another which is the branche's logic. If the
     # branch logic returns 0, then the app state is unchanged, no matter what
     # operations were performed during its exectuion (i.e. it rolls back). Only
     # the first matched branch is executed.
     branches = []
-    invokations = {} if invokations is None else invokations
 
+    # handle `OnComplete` enum values
     if on_create:
-        # TODO: check no-op
         branches.append([tl.Txn.application_id() == zero, on_create])
     if on_delete:
         branches.append(
@@ -340,17 +341,26 @@ def new_app_info(
         branches.append(
             [tl.Txn.on_completion() == tl.OnComplete.CloseOut, on_close_out]
         )
-    for name, expr in invokations.items():
-        name = tl.Bytes(name)
-        branches.append(
-            [
-                tl.Txn.on_completion() == tl.OnComplete.NoOp
-                and tl.Txn.application_args[0] == name,
-                expr,
-            ]
-        )
-    # this is a fall-through, if no branch matched, then no matter what is
-    # requested by the transaction, deny it
+
+    # handle custon invokations with named arg
+    if invokations is not None:
+        for name, expr in invokations.items():
+            branches.append(
+                [
+                    tl.And(
+                        tl.Txn.on_completion() == tl.OnComplete.NoOp,
+                        tl.If(tl.Txn.application_args.length() >= one)
+                        .Then(tl.Txn.application_args[0] == tl.Bytes(name))
+                        .Else(zero),
+                    ),
+                    expr,
+                ]
+            )
+
+    # fallthrough: if no branch is selected, reject
+    # TODO: if `Cond` doesn't match, it will call `err` which will stop
+    # execution and reject, same as this. Not sure which is more semantically
+    # meaningful, but for now prefer to explicitely reject.
     branches.append([one, tl.Return(zero)])
 
     return AppBuildInfo(

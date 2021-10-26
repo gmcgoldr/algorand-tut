@@ -295,6 +295,8 @@ def build_distributed_treasury_app(
 
     return utils.new_app_info(
         on_create=on_create,
+        on_delete=None,
+        on_update=None,
         on_opt_in=on_opt_in,
         on_close_out=on_close_out,
         on_clear=on_close_out,

@@ -1,13 +1,12 @@
-from pathlib import Path
-from typing import List, NamedTuple
+from typing import NamedTuple
 from unittest.mock import Mock
 
 import algosdk as ag
 import pyteal as tl
+import pytest
+from algosdk.future.transaction import StateSchema
 
 from algorand_tut import utils
-
-NODE_DATA_DIR = Path("/var/lib/algorand/net1/Primary")
 
 
 class AccountInfo(NamedTuple):
@@ -51,12 +50,189 @@ def test_fix_lease_size_truncates_lease():
     assert len(fixed) == ag.constants.LEASE_LENGTH
 
 
-class TestNewAppInfo:
-    def test_it_builds_default_create_delete(self):
-        info = utils.new_app_info()
-        app = tl.compileTeal(info.approval, mode=tl.Mode.Application, version=5)
+def test_build_app_info_from_result():
+    result = {"application-index": 0}
+    app = utils.build_app_info_from_result(result)
+    assert app.app_id == 0
+    assert app.address == "6X7XJO6FX3SHUK2OUL46QBQDSNO67RAFK6O73KJD4IVOMTSOIYANOIVWNU"
 
-        assert info.global_schema.num_uints is None
-        assert info.global_schema.num_byte_slices is None
-        assert info.local_schema.num_uints is None
-        assert info.local_schema.num_byte_slices is None
+
+class TestNewAppInfo:
+    def test_it_branches_for_on_completion_codes(self):
+        info = utils.new_app_info(
+            on_create=tl.Return(tl.Int(2)),
+            on_delete=tl.Return(tl.Int(3)),
+            on_update=tl.Return(tl.Int(4)),
+            on_opt_in=tl.Return(tl.Int(5)),
+            on_close_out=tl.Return(tl.Int(6)),
+            on_clear=tl.Return(tl.Int(7)),
+            invokations=None,
+            global_schema=StateSchema(),
+            local_schema=StateSchema(),
+        )
+        # fmt: off
+        assert str(info.approval) == (
+            '(Cond '
+                '['
+                    '(== (Txn ApplicationID) (Int: 0)), '
+                    '(Return (Int: 2))'
+                '] '
+                '['
+                    '(== (Txn OnCompletion) (IntEnum: DeleteApplication)), '
+                    '(Return (Int: 3))'
+                '] '
+                '['
+                    '(== (Txn OnCompletion) (IntEnum: UpdateApplication)), '
+                    '(Return (Int: 4))'
+                '] '
+                '['
+                    '(== (Txn OnCompletion) (IntEnum: OptIn)), '
+                    '(Return (Int: 5))'
+                '] '
+                '['
+                    '(== (Txn OnCompletion) (IntEnum: CloseOut)), '
+                    '(Return (Int: 6))'
+                '] '
+                '[(Int: 1), (Return (Int: 0))]'
+            ')'
+        )
+        # fmt: on
+        assert str(info.clear) == "(Return (Int: 7))"
+
+    def test_it_branches_for_invokations(self):
+        info = utils.new_app_info(
+            on_create=None,
+            on_delete=None,
+            on_update=None,
+            on_opt_in=None,
+            on_close_out=None,
+            on_clear=None,
+            invokations={"name": tl.Return(tl.Int(2))},
+            global_schema=StateSchema(),
+            local_schema=StateSchema(),
+        )
+        # fmt: off
+        assert str(info.approval) == (
+            '(Cond '
+                '['
+                    '(&& '
+                        '(== (Txn OnCompletion) (IntEnum: NoOp)) '
+                        '(If '
+                            '(>= (Txn NumAppArgs) (Int: 1)) '
+                            '(== (Txna ApplicationArgs 0) (utf8 bytes: "name")) '
+                            '(Int: 0)'
+                        ')'
+                    '), '
+                    '(Return (Int: 2))'
+                '] '
+                '[(Int: 1), (Return (Int: 0))]'
+            ')'
+        )
+        # fmt: on
+
+    def test_it_sets_schema(self):
+        global_schema = StateSchema(num_uints=1)
+        local_schema = StateSchema(num_byte_slices=2)
+        info = utils.new_app_info(
+            on_create=tl.Return(tl.Int(1)),
+            on_delete=None,
+            on_update=None,
+            on_opt_in=None,
+            on_close_out=None,
+            on_clear=None,
+            invokations=None,
+            global_schema=global_schema,
+            local_schema=local_schema,
+        )
+        assert info.global_schema is global_schema
+        assert info.local_schema is local_schema
+
+
+@pytest.fixture
+def state() -> utils.StateBuilder:
+    return utils.StateBuilder(
+        utils.StateBuilder.Scope.GLOBAL,
+        [
+            utils.KeyInfo("def_i", tl.Int, tl.Int(1)),
+            utils.KeyInfo("def_b", tl.Bytes, tl.Bytes("a")),
+            utils.KeyInfo("opt_i", tl.Int),
+            utils.KeyInfo("opt_b", tl.Bytes),
+        ],
+    )
+
+
+class TestStateBuilder:
+    def test_it_counts_schema(self):
+        state = utils.StateBuilder(
+            utils.StateBuilder.Scope.GLOBAL,
+            [
+                utils.KeyInfo("a", tl.Bytes),
+                utils.KeyInfo("b", tl.Int),
+                utils.KeyInfo("c", tl.Int),
+                utils.KeyInfo("d", tl.Int),
+                utils.KeyInfo("e", tl.Bytes),
+            ],
+        )
+        assert state.schema().num_byte_slices == 2
+        assert state.schema().num_uints == 3
+
+    def test_it_gets_default_value(self, state: utils.StateBuilder):
+        assert str(state.get("def_i")) == '(app_global_get (utf8 bytes: "def_i"))'
+
+    def test_it_loads_and_gets_opt_value(self, state: utils.StateBuilder):
+        assert str(state.maybe("opt_b")).startswith(
+            "("
+            '(app_global_get_ex (Global CurrentApplicationID) (utf8 bytes: "opt_b")) '
+            "(StackStore slot#"
+        )
+        assert str(state.get("opt_b")).startswith("(Load slot#")
+
+    def test_it_sets_int(self, state: utils.StateBuilder):
+        assert (
+            str(state.set("def_i", tl.Int(2)))
+            == '(app_global_put (utf8 bytes: "def_i") (Int: 2))'
+        )
+        assert (
+            str(state.set("opt_i", tl.Int(2)))
+            == '(app_global_put (utf8 bytes: "opt_i") (Int: 2))'
+        )
+
+    def test_it_sets_bytes(self, state: utils.StateBuilder):
+        assert (
+            str(state.set("def_b", tl.Bytes("b")))
+            == '(app_global_put (utf8 bytes: "def_b") (utf8 bytes: "b"))'
+        )
+        assert (
+            str(state.set("opt_b", tl.Bytes("b")))
+            == '(app_global_put (utf8 bytes: "opt_b") (utf8 bytes: "b"))'
+        )
+
+    def test_it_increments(self, state: utils.StateBuilder):
+        assert str(state.inc("def_i", tl.Int(2))) == (
+            '(app_global_put (utf8 bytes: "def_i") '
+            '(+ (app_global_get (utf8 bytes: "def_i")) (Int: 2)))'
+        )
+
+    def test_it_decrements(self, state: utils.StateBuilder):
+        assert str(state.dec("def_i", tl.Int(2))) == (
+            '(app_global_put (utf8 bytes: "def_i") '
+            '(- (app_global_get (utf8 bytes: "def_i")) (Int: 2)))'
+        )
+
+    def test_it_builds_create(self, state: utils.StateBuilder):
+        # fmt: off
+        assert str(state.create()) == (
+            '(Seq '
+                '(app_global_put (utf8 bytes: "def_i") (Int: 1)) '
+                '(app_global_put (utf8 bytes: "def_b") (utf8 bytes: "a"))'
+            ')'
+        )
+        # fmt: on
+
+    def test_it_builds_load_maybe(self, state: utils.StateBuilder):
+        teal = str(state.load_maybe())
+        # the actual code has arbitrary slot numbers, just ensure it has the
+        # correct elements
+        assert '"opt_i"' in teal
+        assert '"opt_b"' in teal
+        assert "app_global_get_ex" in teal

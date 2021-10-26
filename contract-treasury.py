@@ -142,7 +142,7 @@ def main(node_data_dir: Path):
     params = algod_client.suggested_params()
     params.fee = 0  # use the minimum network fee
     # compile the programs and package into app creation txn
-    txn = utils.build_app_from_info(app, account1.address, params)
+    txn = utils.build_app_from_build_info(app, account1.address, params)
     txid = algod_client.send_transaction(txn.sign(account1.key))
     result = utils.get_confirmed_transaction(algod_client, txid, wait_blocks)
     # thet the id of the created app, this is effectively the app's address,
