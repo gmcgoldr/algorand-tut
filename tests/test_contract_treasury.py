@@ -19,6 +19,7 @@ from algorand_tut import contracts, utils
 
 NODE_DATA_DIR = Path("/var/lib/algorand/net1/Primary")
 MSG_REJECT = r".*transaction rejected by ApprovalProgram$"
+MSG_ERR = r".*transaction rejected by ApprovalProgram$"
 
 
 class Config(NamedTuple):
@@ -36,7 +37,7 @@ def build_cfg():
         account, txid = utils.fund_from_genesis(
             algod_client,
             kmd_client,
-            ag.util.algos_to_microalgos(100),
+            ag.util.algos_to_microalgos(1000),
         )
         accounts.append(account)
         txids.append(txid)
@@ -128,3 +129,56 @@ class TestRejections(TestCase):
             )
             with pytest.raises(ag.error.AlgodHTTPError, match=MSG_REJECT):
                 self.cfg.algod_client.send_transaction(txn.sign(account.key))
+
+
+class TestNomination(TestCase):
+    def setUp(self):
+        self.cfg = build_cfg()
+        self.params = build_params(self.cfg)
+        self.app = build_app(self.cfg, self.params)
+        opt_in(self.cfg, self.params, self.app)
+
+    def test_opted_in_can_nominate(self):
+        txn = ApplicationNoOpTxn(
+            sender=self.cfg.accounts[1].address,
+            sp=self.params,
+            index=self.app.app_id,
+            app_args=["nominate".encode("utf8"), 20],
+        )
+        txid = self.cfg.algod_client.send_transaction(
+            txn.sign(self.cfg.accounts[1].key)
+        )
+        assert utils.get_confirmed_transaction(self.cfg.algod_client, txid, 5)
+
+    def test_not_opted_in_cant_nominate(self):
+        txn = ApplicationNoOpTxn(
+            sender=self.cfg.accounts[2].address,
+            sp=self.params,
+            index=self.app.app_id,
+            app_args=["nominate".encode("utf8"), 20],
+        )
+        with pytest.raises(ag.error.AlgodHTTPError, match=MSG_REJECT):
+            self.cfg.algod_client.send_transaction(txn.sign(self.cfg.accounts[2].key))
+
+    def test_cant_nominate_during_voting(self):
+        txn = ApplicationNoOpTxn(
+            sender=self.cfg.accounts[0].address,
+            sp=self.params,
+            index=self.app.app_id,
+            app_args=["nominate".encode("utf8"), 20],
+        )
+        txid = self.cfg.algod_client.send_transaction(
+            txn.sign(self.cfg.accounts[0].key)
+        )
+        assert utils.get_confirmed_transaction(self.cfg.algod_client, txid, 5)
+
+        txn = ApplicationNoOpTxn(
+            sender=self.cfg.accounts[1].address,
+            sp=self.params,
+            index=self.app.app_id,
+            app_args=["nominate".encode("utf8"), 20],
+        )
+        with pytest.raises(ag.error.AlgodHTTPError, match=MSG_REJECT):
+            txid = self.cfg.algod_client.send_transaction(
+                txn.sign(self.cfg.accounts[1].key)
+            )
