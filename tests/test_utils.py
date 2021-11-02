@@ -1,3 +1,4 @@
+import base64
 from typing import NamedTuple
 from unittest.mock import Mock
 
@@ -236,3 +237,67 @@ class TestStateBuilder:
         assert '"opt_i"' in teal
         assert '"opt_b"' in teal
         assert "app_global_get_ex" in teal
+
+
+def test_get_app_global_key_returns_value():
+    client = Mock()
+    key = base64.b64encode("a".encode("utf8")).decode("ascii")
+    client.application_info = (
+        lambda app_id: {
+            "params": {"global-state": [{"key": ""}, {}, {"key": key, "value": "b"}]}
+        }
+        if app_id == 1
+        else {}
+    )
+    assert utils.get_app_global_key(client, app_id=1, key="a") == "b"
+
+
+def test_get_app_global_key_missing_returns_none():
+    client = Mock()
+    key = base64.b64encode("a".encode("utf8")).decode("ascii")
+    client.application_info = (
+        lambda app_id: {
+            "params": {"global-state": [{"key": ""}, {}, {"key": key, "value": "b"}]}
+        }
+        if app_id == 1
+        else {}
+    )
+    assert utils.get_app_global_key(client, app_id=1, key="") is None
+    assert utils.get_app_global_key(client, app_id=0, key="b") is None
+
+
+def test_get_app_local_key_returns_value():
+    client = Mock()
+    key = base64.b64encode("a".encode("utf8")).decode("ascii")
+    client.account_info = (
+        lambda address: {
+            "apps-local-state": [
+                {"id": 1, "key-value": [{"key": ""}, {}, {"key": key, "value": "c"}]}
+            ]
+        }
+        if address == "b"
+        else {}
+    )
+    assert utils.get_app_local_key(client, app_id=1, address="b", key="a") == "c"
+
+
+def test_get_app_local_key_missing_returns_none():
+    client = Mock()
+    key = base64.b64encode("a".encode("utf8")).decode("ascii")
+    client.account_info = (
+        lambda address: {
+            "apps-local-state": [
+                {"id": 1, "key-value": [{"key": ""}, {}, {"key": key, "value": "c"}]}
+            ]
+        }
+        if address == "b"
+        else {}
+    )
+    assert utils.get_app_local_key(client, app_id=0, address="b", key="a") == None
+    assert utils.get_app_local_key(client, app_id=1, address="", key="a") == None
+    assert utils.get_app_local_key(client, app_id=1, address="b", key="") == None
+
+
+def test_extract_state_value_returns_value():
+    assert utils.extract_state_value({"type": 1, "bytes": b"a", "uint": None}) == b"a"
+    assert utils.extract_state_value({"type": 2, "bytes": b"", "uint": 1}) == 1

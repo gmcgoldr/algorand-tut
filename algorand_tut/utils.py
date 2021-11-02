@@ -1,3 +1,4 @@
+import base64
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -343,24 +344,24 @@ def new_app_info(
         )
 
     # handle custon invokations with named arg
-    if invokations is not None:
-        for name, expr in invokations.items():
-            branches.append(
-                [
-                    tl.And(
-                        tl.Txn.on_completion() == tl.OnComplete.NoOp,
-                        tl.If(tl.Txn.application_args.length() >= one)
-                        .Then(tl.Txn.application_args[0] == tl.Bytes(name))
-                        .Else(zero),
-                    ),
-                    expr,
-                ]
-            )
+    invokations = {} if invokations is None else invokations
+    for name, expr in invokations.items():
+        branches.append(
+            [
+                # use a an invokation branch for no-op calls with the branch
+                # name as arg 0
+                tl.And(
+                    tl.Txn.on_completion() == tl.OnComplete.NoOp,
+                    # don't want to err if arg is not provided, so use if
+                    tl.If(tl.Txn.application_args.length() >= one)
+                    .Then(tl.Txn.application_args[0] == tl.Bytes(name))
+                    .Else(zero),
+                ),
+                expr,
+            ]
+        )
 
     # fallthrough: if no branch is selected, reject
-    # TODO: if `Cond` doesn't match, it will call `err` which will stop
-    # execution and reject, same as this. Not sure which is more semantically
-    # meaningful, but for now prefer to explicitely reject.
     branches.append([one, tl.Return(zero)])
 
     return AppBuildInfo(
@@ -557,3 +558,42 @@ class StateBuilder:
         return transaction.StateSchema(
             num_uints=num_uints, num_byte_slices=num_byte_slices
         )
+
+
+def get_app_global_key(algod_client: AlgodClient, app_id: int, key: str):
+    """
+    Return the value for the given `key` in `app_id`'s global data.
+    """
+    key = base64.b64encode(key.encode("utf8")).decode("ascii")
+    app_info = algod_client.application_info(app_id)
+    for key_state in app_info.get("params", {}).get("global-state", []):
+        if key_state.get("key", None) != key:
+            continue
+        return key_state.get("value", None)
+    return None
+
+
+def get_app_local_key(algod_client: AlgodClient, app_id: int, address: str, key: str):
+    """
+    Return the value for the given `key` in `app_id`'s local data for account
+    `address`.
+    """
+    key = base64.b64encode(key.encode("utf8")).decode("ascii")
+    account_info = algod_client.account_info(address)
+    for app_state in account_info.get("apps-local-state", []):
+        if app_state.get("id", None) != app_id:
+            continue
+        for key_state in app_state.get("key-value", []):
+            if key_state.get("key", None) != key:
+                continue
+            return key_state.get("value", None)
+    return None
+
+
+def extract_state_value(value: Dict):
+    if value is None:
+        return None
+    if value.get("type", None) == 1:
+        return value.get("bytes", None)
+    if value.get("type", None) == 2:
+        return value.get("uint", None)
