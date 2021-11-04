@@ -244,12 +244,18 @@ def test_get_app_global_key_returns_value():
     key = base64.b64encode("a".encode("utf8")).decode("ascii")
     client.application_info = (
         lambda app_id: {
-            "params": {"global-state": [{"key": ""}, {}, {"key": key, "value": "b"}]}
+            "params": {
+                "global-state": [
+                    {"key": ""},
+                    {},
+                    {"key": key, "value": {"type": 1, "bytes": b"b"}},
+                ]
+            }
         }
         if app_id == 1
         else {}
     )
-    assert utils.get_app_global_key(client, app_id=1, key="a") == "b"
+    assert utils.get_app_global_key(client, app_id=1, key="a") == b"b"
 
 
 def test_get_app_global_key_missing_returns_none():
@@ -257,7 +263,13 @@ def test_get_app_global_key_missing_returns_none():
     key = base64.b64encode("a".encode("utf8")).decode("ascii")
     client.application_info = (
         lambda app_id: {
-            "params": {"global-state": [{"key": ""}, {}, {"key": key, "value": "b"}]}
+            "params": {
+                "global-state": [
+                    {"key": ""},
+                    {},
+                    {"key": key, "value": {"type": 1, "bytes": b"b"}},
+                ]
+            }
         }
         if app_id == 1
         else {}
@@ -272,13 +284,20 @@ def test_get_app_local_key_returns_value():
     client.account_info = (
         lambda address: {
             "apps-local-state": [
-                {"id": 1, "key-value": [{"key": ""}, {}, {"key": key, "value": "c"}]}
+                {
+                    "id": 1,
+                    "key-value": [
+                        {"key": ""},
+                        {},
+                        {"key": key, "value": {"type": 1, "bytes": b"c"}},
+                    ],
+                }
             ]
         }
         if address == "b"
         else {}
     )
-    assert utils.get_app_local_key(client, app_id=1, address="b", key="a") == "c"
+    assert utils.get_app_local_key(client, app_id=1, address="b", key="a") == b"c"
 
 
 def test_get_app_local_key_missing_returns_none():
@@ -287,7 +306,14 @@ def test_get_app_local_key_missing_returns_none():
     client.account_info = (
         lambda address: {
             "apps-local-state": [
-                {"id": 1, "key-value": [{"key": ""}, {}, {"key": key, "value": "c"}]}
+                {
+                    "id": 1,
+                    "key-value": [
+                        {"key": ""},
+                        {},
+                        {"key": key, "value": {"type": 1, "bytes": b"c"}},
+                    ],
+                }
             ]
         }
         if address == "b"

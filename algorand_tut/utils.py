@@ -560,7 +560,9 @@ class StateBuilder:
         )
 
 
-def get_app_global_key(algod_client: AlgodClient, app_id: int, key: str):
+def get_app_global_key(
+    algod_client: AlgodClient, app_id: int, key: str
+) -> Union[int, bytes]:
     """
     Return the value for the given `key` in `app_id`'s global data.
     """
@@ -569,11 +571,13 @@ def get_app_global_key(algod_client: AlgodClient, app_id: int, key: str):
     for key_state in app_info.get("params", {}).get("global-state", []):
         if key_state.get("key", None) != key:
             continue
-        return key_state.get("value", None)
+        return extract_state_value(key_state.get("value", None))
     return None
 
 
-def get_app_local_key(algod_client: AlgodClient, app_id: int, address: str, key: str):
+def get_app_local_key(
+    algod_client: AlgodClient, app_id: int, address: str, key: str
+) -> Union[int, bytes]:
     """
     Return the value for the given `key` in `app_id`'s local data for account
     `address`.
@@ -586,7 +590,7 @@ def get_app_local_key(algod_client: AlgodClient, app_id: int, address: str, key:
         for key_state in app_state.get("key-value", []):
             if key_state.get("key", None) != key:
                 continue
-            return key_state.get("value", None)
+            return extract_state_value(key_state.get("value", None))
     return None
 
 
