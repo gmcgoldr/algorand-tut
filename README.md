@@ -186,6 +186,10 @@ Some notes on these choices:
   so it seems a single-node network is the exception.
 
 To create the private network, run the provided script `bash make-node.sh`.
+This will additionally instruct the network to operate in `DevMode`,
+meaning that each transaction creates a new block without waiting for consensus.
+This is handy for unit testing contracts,
+but additional integration tests should be done in a real environment.
 
 ## Run the node
 

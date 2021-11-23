@@ -88,7 +88,7 @@ def get_confirmed_transactions(
     waiting_ids = set(transaction_ids)
     confirmed = []
 
-    while waiting_ids and current_round < start_round + timeout_blocks:
+    while current_round < start_round + timeout_blocks:
         for transaction_id in list(waiting_ids):
             # NOTE: documentation suggests that transactions are "remembered"
             # by a node for some time after confirmation, but doesn't specify
@@ -99,6 +99,8 @@ def get_confirmed_transactions(
             elif pending_txn.get("confirmed-round", 0) > 0:
                 confirmed.append(pending_txn)
                 waiting_ids.remove(transaction_id)
+        if not waiting_ids:
+            break
         # wait until the end of this block
         client.status_after_block(current_round)
         current_round += 1
@@ -117,45 +119,6 @@ def get_confirmed_transaction(
         return confirmed[0]
     else:
         return None
-
-
-def compile_teal_source(source: str) -> bytes:
-    """
-    Compile teal source code into a teal binary using `goal`.
-
-    Writes intermediate files to a temporary directory and makes a subprocess
-    call to `goal`.
-
-    If the compilation fails, prints the output and rasies an error.
-
-    Args:
-        source: the teal source code
-
-    Returns:
-        the teal program binary
-    """
-    with TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-        with (tmpdir / "program.teal").open("w") as fio:
-            fio.write(source)
-
-        args = [
-            "goal",
-            "clerk",
-            "compile",
-            "-o",
-            str(tmpdir / "program.tealc"),
-            str(tmpdir / "program.teal"),
-        ]
-        result = subprocess.run(args, check=True, capture_output=True)
-        if result.returncode != 0:
-            sys.stderr.write(result.stderr)
-            sys.stderr.flush()
-            # raise an error
-            result.check_returncode()
-
-        with (tmpdir / "program.tealc").open("rb") as fio:
-            return fio.read()
 
 
 def fix_lease_size(lease: bytes) -> bytes:
@@ -245,8 +208,14 @@ class AppBuildInfo(NamedTuple):
     local_schema: transaction.StateSchema
 
 
+def compile_teal(client: AlgodClient, source: str) -> bytes:
+    result = client.compile(source)
+    result = result["result"]
+    return base64.b64decode(result)
+
+
 def build_app_from_build_info(
-    info: AppBuildInfo, address: str, params: transaction.SuggestedParams
+    client: AlgodClient, info: AppBuildInfo, address: str, params: transaction.SuggestedParams
 ) -> transaction.ApplicationCreateTxn:
     """
     Compile the app programs build the app creation transaction.
@@ -258,7 +227,7 @@ def build_app_from_build_info(
         # no state change requested in this transaciton beyond app creation
         on_complete=transaction.OnComplete.NoOpOC.real,
         # the program to handle app state changes
-        approval_program=compile_teal_source(
+        approval_program=compile_teal(client,
             tl.compileTeal(
                 info.approval,
                 mode=tl.Mode.Application,
@@ -266,7 +235,7 @@ def build_app_from_build_info(
             )
         ),
         # the program to run when an account forces an opt-out
-        clear_program=compile_teal_source(
+        clear_program=compile_teal(client,
             tl.compileTeal(
                 info.clear,
                 mode=tl.Mode.Application,

@@ -1,6 +1,8 @@
 {
 	"Genesis": {
 		"NetworkName": "",
+		"ConsensusProtocol": "future",
+		"DevMode": true,
 		"Wallets": [
 			{
 				"Name": "Wallet1",

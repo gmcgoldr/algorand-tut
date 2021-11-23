@@ -68,12 +68,12 @@ def build_params(cfg: Config) -> SuggestedParams:
     return params
 
 
-WAIT = 60
+WAIT = 1
 
 
 def build_app(cfg: Config, params: SuggestedParams) -> utils.AppInfo:
     app = contracts.build_distributed_treasury_app(WAIT, WAIT, WAIT)
-    txn = utils.build_app_from_build_info(app, cfg.accounts[0].address, params)
+    txn = utils.build_app_from_build_info(cfg.algod_client, app, cfg.accounts[0].address, params)
     txid = cfg.algod_client.send_transaction(txn.sign(cfg.accounts[0].key))
     return utils.build_app_info_from_result(
         utils.get_confirmed_transaction(cfg.algod_client, txid, 5)
@@ -138,7 +138,7 @@ class TestRejections(TestCase):
                 self.cfg.algod_client.send_transaction(txn.sign(account.key))
 
     def test_it_rejects_update(self):
-        program_true = utils.compile_teal_source(
+        program_true = utils.compile_teal(self.cfg.algod_client,
             tl.compileTeal(
                 tl.Return(tl.Int(1)),
                 mode=tl.Mode.Application,
