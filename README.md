@@ -23,13 +23,6 @@ In its current form, here's what the tutorial will walk you through:
 3. Setup accounts and make transfers using CLIs and the Python SDK
 4. Write a distributed treasury contract with voting
 
-All steps are code are tested on Ubuntu 20.04 running in WSL2,
-with `python` 3.8,
-and `algod` 2.10.1.
-The steps should translate well to a native Ubuntu 20.04 installation,
-and can probably be translated fairly well to other Linux distributions,
-given that you have good familiarity with that distribution's tooling.
-
 ## Key defintions
 
 Here are a few definitions to help read this document:
@@ -68,6 +61,8 @@ It is also possible to install algorand using in a Docker container,
 so that no additional system configuration is required.
 More at <https://developer.algorand.org/docs/run-a-node/setup/install/>.
 
+All installation steps can be executed with `./install.sh`.
+
 ### Install pre-requisites
 
 ```bash
@@ -102,7 +97,7 @@ Install python dependencies
 (as the `algorand` user which will be running the python scripts):
 
 ```bash
-sudu -u algorand pip install -U py-algorand-sdk pyteal
+sudu -u algorand pip install -r requirements.txt
 ```
 
 NOTE: `sudo -u algorand` will be used frequently to interact with the operating
@@ -172,9 +167,9 @@ This template instructs `goal` to setup node data with:
 - a single node in the network,
 - the node can serve as a relay for other nodes,
 - the node hosts the wallet `Wallet1`,
-- the keys in `Wallet1` can participate in both consensus as well as general transactions.
+- the keys in `Wallet1` can participate in both consensus as well as transactions.
 
-Some notes on these choices:
+Some notes on those choices:
 
 - If no node is online, the network will stay stuck on the genesis block.
 - The stake must add up to `100%`.
@@ -185,52 +180,79 @@ Some notes on these choices:
   But this seems to work fine if the node is not marked `IsRelay`,
   so it seems a single-node network is the exception.
 
-To create the private network, run the provided script `bash make-node.sh`.
-This will additionally instruct the network to operate in `DevMode`,
-meaning that each transaction creates a new block without waiting for consensus.
-This is handy for unit testing contracts,
-but additional integration tests should be done in a real environment.
+To create the private network, run `./make-node.sh private`.
+
+#### Dev mode network
+
+A network can also be configured in "dev mode".
+Documentation on this mode currently appears to be scant,
+but its main effect is to allow each transaction to be executed in its own block.
+
+This is tremendously useful when debugging a smart contract:
+instead of sending a transaction and waiting for your node to complete a consensus round
+(which takes a few seconds),
+the transaction is immediately executed in its own block.
+
+This gives you both low latency execution (good for testing),
+and deterministic blocks.
+However, these blocks do not ressemble real blocks,
+and subtle errors could arise if testing only in dev mode
+(e.g. you won't see the effect of multiple transactions interacting with a stateful contract in the same block).
+
+In order to enable dev mode in the network template,
+set `ConsensusProtocol` to `future`,
+and `DevMode` to `true`.
+
+To create the dev network, run `./make-node.sh dev`.
 
 ## Run the node
 
 The `algorand` Debian package exepcts its daemons to be managed by `systemd`.
-But `systemd` is not running on WSL2.
-So, in what follows, the daemons will be run directly from the command line.
-If you are following along on a native Ubuntu installation,
-feel free to use `systemd` to start and stop the daemons,
-or just to keep them stopped in `systemd` and follow along here.
+Under normal circumstances,
+the process is spawned and kept alive by `systemd`.
 
-Run the node daemon `algod` and the key manager daemond `kmd` in the background:
+However, for testing purposes, and for enviroments lacking `systemd` (e.g. WSL2),
+it can be useful to start the node daemons directly using `goal`:
 
 ```bash
-sudo -u algorand algod -d /var/lib/algorand/net1/Primary &
-sudo -u algorand kmd -d /var/lib/algorand/net1/Primary/kmd-v0.5 &
+sudo -u algorand goal -d $node_data_dir node start
+sudo -u algorand goal -d $node_data_dir kmd start
+```
+
+Convenience scripts are included in the tutorial repository to start and stop the daemons:
+
+```bash
+./start-node.sh {primary,dev}
+./stop-node.sh {primary,dev}
 ```
 
 ### Data directory
 
 The `-d` flag is used in many commands to specify a data directory.
 In this case,
-the node is being told to run with the data created by `goal` when the private network was built,
-which connects the node to the private network.
+the node is being told to run with the data created by `goal` when the network was built,
+which connects the node to the network.
 
 The key manager runs on a node and manages wallets.
 It allows the node to use the private keys held in those wallets.
-Otherwise, those private keys would need to be passed to the node through its API when the node needs to use an account's private key,
-for example to sign a transaction.
+Otherwise, when the node needs to an account's signature,
+those private keys would need to be passed through the node's API.
 
 ## Interacting and transferring
 
 Some CLI interactions are demoed in `transfer-cli.sh`,
 which adds an account and transfers some Algos.
 Programatic access is demoed in `transfer-sdk.py`.
-More: <https://developer.algorand.org/docs/build-apps/hello_world/>.
 
-Run the scripts:
+The following commands can be used to run the scripts.
+Note that the daemons must be running for the scripts to interact with the network.
 
 ```bash
-bash transfer-cli.sh
-sudo -u algorand python3 transfer-sdk.py /var/lib/algorand/net1/Primary
+network=private
+./start-node.sh ${network}
+./transfer-cli.sh /var/lib/algorand/net_${network}/Primary
+sudo -u algorand python3 transfer-sdk.py /var/lib/algorand/net_${network}/Primary
+./stop-node.sh ${network}
 ```
 
 ## Creating a smart contract
@@ -255,7 +277,7 @@ A node sends a request for some state transition
 and the validators use the contract to validate the transition.
 
 Another way to think of smart signatures is to consider them as a template:
-they specify the state of transactions to approve (e.g. the sender, receiver,
+they specify a subset of transactions to approve (e.g. the sender, receiver,
 amount etc.). Those transactions which match the template are approved, while
 others are rejected.
 
@@ -319,7 +341,7 @@ and will either take effect or not depending on its return value.
 If the program returns false,
 the state changes made during the program execution are not confirmed by the network.
 However,
-the `ClearState` transaction will clear the account's local state regardless of return code.
+the `ClearState` transaction will clear the account's local state regardless of return value.
 
 NOTE: "program" here is used to describe the logic tied to the contract.
 But in fact there are two separate programs tied to a stateful contract:

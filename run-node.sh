@@ -1,11 +1,18 @@
 #!/bin/bash
 
-# Start the `algod` daemon in the background
-sudo -u algorand algod -d /var/lib/algorand/net1/Primary &
-# And start the `kmd` daemon blocking. Not cleary why it must point to the 
-# specific version directory, but this is where the genesis wallet data resides
-sudo -u algorand kmd -d /var/lib/algorand/net1/Primary/kmd-v0.5
-# NOTE: this isn't a great solution, but this script is just a quick and dirty
-# way to get the two daemons running together without systemd
-sudo killall -u algorand
+if [[ -z $1 ]]; then
+	echo "usage: run-node.sh {private,dev}"
+    exit -1
+fi
 
+network=$1
+
+# start `algod` and `kmd` daemons in the background
+sudo -u algorand goal -d /var/lib/algorand/net_${network}/Primary node start
+sudo -u algorand goal -d /var/lib/algorand/net_${network}/Primary kmd start
+
+# wait for user input
+read -n 1 -p "Press any key to stop "
+# stop the daemons
+sudo -u algorand goal -d /var/lib/algorand/net_${network}/Primary node stop
+sudo -u algorand goal -d /var/lib/algorand/net_${network}/Primary kmd stop

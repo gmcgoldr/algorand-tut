@@ -1,12 +1,16 @@
 #!/bin/bash
 
+if [[ -z $1 ]]; then
+	echo "usage: transfer-cli.sh note_data_dir"
+    exit -1
+fi
+
+dir=$1
+
 # Becaues the algorand user doesn't have a password, can't su directly to it
 # without use account configuration, use sudo instead to run each command from
 # that account
 pre="sudo -u algorand"
-
-# The node data directory, often called ALGORAND_DATA
-dir=/var/lib/algorand/net1/Primary
 
 # Make sure algod is interact with the network
 printf "Network status:\n"
