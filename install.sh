@@ -10,5 +10,5 @@ sudo add-apt-repository "deb [arch=amd64] https://releases.algorand.com/deb/ sta
 
 sudo apt-get update
 sudo apt-get install algorand
+sudu -u algorand pip install -U py-algorand-sdk pyteal pyteal-utils
 
-sudu -u algorand pip install -U py-algorand-sdk pyteal

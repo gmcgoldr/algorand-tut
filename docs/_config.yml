@@ -1,0 +1,16 @@
+title: Algorand Tutorial
+description: >- # this means to ignore newlines until "baseurl:"
+  An introduction to writing stateful smart contracts in Algorand in a python environment.
+baseurl: "/algorand-tut"
+url: ""
+github_repo: "gmcgoldr/algorand-tut"
+
+theme: minima
+
+header_pages:
+  - index.md
+  - configuration.md
+  - transactions.md
+  - applications.md
+  - testing.md
+  - glossary.md

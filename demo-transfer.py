@@ -1,53 +1,55 @@
-import json
+#!/usr/bin/env python3
+
 from pathlib import Path
 
 import algosdk as ag
+import pyteal_utils as ptu
 from algosdk.future.transaction import PaymentTxn
-
-from algorand_tut import utils
 
 
 def main(node_data_dir: Path):
-    algod_client = utils.build_algod_client(node_data_dir)
-    kmd_client = utils.build_kmd_client(node_data_dir)
+    algod_client = ptu.clients.build_algod_local_client(node_data_dir)
+    kmd_client = ptu.clients.build_kmd_local_client(node_data_dir)
 
     # Following the configuration in this repository, there should be an
     # account in the default wallet with funds. Get it's wallet such that it
     # can be used to send a payment.
-    wallet_id = utils.get_wallet_id(
+    wallet_id = ptu.clients.get_wallet_id(
         kmd_client=kmd_client, name="unencrypted-default-wallet"
     )
 
+    print("Account details:")
+
     # NOTE: the default wallet is unecrypted so no password is required
-    with utils.get_wallet_handle(kmd_client, wallet_id, "") as handle:
+    with ptu.clients.get_wallet_handle(kmd_client, wallet_id, "") as handle:
         keys = kmd_client.list_keys(handle)
         if not keys:
             raise RuntimeError("funded account not found in wallet")
         from_address = keys[0]
+    print(f"  genesis address: {from_address}")
 
     # Create a new standalone account. It is also be possible to create an
     # account managed by a wallet with `kmd`.
     # See: https://developer.algorand.org/docs/features/accounts/create/
-    print("\nNew account to receive funds:")
     to_private_key, to_address = ag.account.generate_account()
-    print(f"To address: {to_address}")
-    print(f"Passphrase: {ag.mnemonic.from_private_key(to_private_key)}")
+    print(f"  new address: {to_address}")
+    print(f"  passphrase : {ag.mnemonic.from_private_key(to_private_key)}")
 
-    print("\nBalances:")
+    print("Balances:")
     to_account_info = algod_client.account_info(to_address)
     from_account_info = algod_client.account_info(from_address)
     print(
-        "From: {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(to_account_info.get("amount", 0))
-        )
-    )
-    print(
-        "To: {:.6f} Algos".format(
+        "  from: {:.6f} Algos".format(
             ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
         )
     )
+    print(
+        "  to  : {:.6f} Algos".format(
+            ag.util.microalgos_to_algos(to_account_info.get("amount", 0))
+        )
+    )
 
-    print("\nMove Algos:")
+    print("Move Algos:")
     # Can add aribtrary binary data (up to 1000 bytes) to the transaction.
     note = "Hello World".encode()
     # Get defaults for the transaction parameters. In particular, there is a
@@ -57,10 +59,6 @@ def main(node_data_dir: Path):
     # the current block.
     # More: https://developer.algorand.org/docs/reference/transactions/
     params = algod_client.suggested_params()
-    # Don't scale the fee with the transaction size (in bytes), instead use
-    # the current minimum fee (in microAlgos). This also includes a transaction
-    # validity range from the current block for the max duration (1000 blocks).
-    print("Params: {}".format(json.dumps(vars(params), indent="\t")))
     # The fee is calculated as:
     # `max(min_fee, fee if not flat_fee else (fee * num_bytes))`
     # where `min_fee` is the minimum fee enfoced by the netwrok, and
@@ -76,28 +74,27 @@ def main(node_data_dir: Path):
     )
 
     # Sign the transaction, letting `kmd` manage the private key.
-    with utils.get_wallet_handle(kmd_client, wallet_id, "") as handle:
+    with ptu.clients.get_wallet_handle(kmd_client, wallet_id, "") as handle:
         txn = kmd_client.sign_transaction(handle, "", txn)
 
     # Send the transaction and wait for it to be confirmed.
     txid = algod_client.send_transaction(txn)
-    print(f"Transaction ID: {txid}")
-    print("Waiting for confirmation...")
-    txn = utils.get_confirmed_transaction(algod_client, txid, 4)
-    print("Confirmed: {}".format(json.dumps(txn, indent="\t")))
+    print(f"  transaction ID: {txid}")
+    print("  waiting for confirmation...")
+    txn = ptu.transactions.get_confirmed_transaction(algod_client, txid, 4)
 
     # Verify the account balances have changed.
-    print("\nBalances:")
+    print("Balances:")
     to_account_info = algod_client.account_info(to_address)
     from_account_info = algod_client.account_info(from_address)
     print(
-        "From: {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(to_account_info.get("amount", 0))
+        "  from: {:.6f} Algos".format(
+            ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
         )
     )
     print(
-        "To: {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
+        "  to  : {:.6f} Algos".format(
+            ag.util.microalgos_to_algos(to_account_info.get("amount", 0))
         )
     )
 
