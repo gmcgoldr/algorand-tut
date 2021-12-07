@@ -11,33 +11,24 @@ def main(node_data_dir: Path):
     algod_client = ptu.clients.build_algod_local_client(node_data_dir)
     kmd_client = ptu.clients.build_kmd_local_client(node_data_dir)
 
-    # Following the configuration in this repository, there should be an
-    # account in the default wallet with funds. Get it's wallet such that it
-    # can be used to send a payment.
-    wallet_id = ptu.clients.get_wallet_id(
-        kmd_client=kmd_client, name="unencrypted-default-wallet"
-    )
+    # get the address of the first account in the wallet
+    wallet = ag.wallet.Wallet("unencrypted-default-wallet", "", kmd_client)
+    sender = wallet.list_keys()[0]
 
     print("Account details:")
 
-    # NOTE: the default wallet is unecrypted so no password is required
-    with ptu.clients.get_wallet_handle(kmd_client, wallet_id, "") as handle:
-        keys = kmd_client.list_keys(handle)
-        if not keys:
-            raise RuntimeError("funded account not found in wallet")
-        from_address = keys[0]
-    print(f"  genesis address: {from_address}")
+    print(f"  genesis address: {sender}")
 
     # Create a new standalone account. It is also be possible to create an
     # account managed by a wallet with `kmd`.
     # See: https://developer.algorand.org/docs/features/accounts/create/
-    to_private_key, to_address = ag.account.generate_account()
-    print(f"  new address: {to_address}")
-    print(f"  passphrase : {ag.mnemonic.from_private_key(to_private_key)}")
+    receiver_key, receiver = ag.account.generate_account()
+    print(f"  new address: {receiver}")
+    print(f"  passphrase : {ag.mnemonic.from_private_key(receiver_key)}")
 
     print("Balances:")
-    to_account_info = algod_client.account_info(to_address)
-    from_account_info = algod_client.account_info(from_address)
+    to_account_info = algod_client.account_info(receiver)
+    from_account_info = algod_client.account_info(sender)
     print(
         "  from: {:.6f} Algos".format(
             ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
@@ -50,7 +41,7 @@ def main(node_data_dir: Path):
     )
 
     print("Move Algos:")
-    # Can add aribtrary binary data (up to 1000 bytes) to the transaction.
+    # Can add arbitrary binary data (up to 1000 bytes) to the transaction.
     note = "Hello World".encode()
     # Get defaults for the transaction parameters. In particular, there is a
     # network-wide minimum transaction fee and maximum transaction duration.
@@ -61,32 +52,30 @@ def main(node_data_dir: Path):
     params = algod_client.suggested_params()
     # The fee is calculated as:
     # `max(min_fee, fee if not flat_fee else (fee * num_bytes))`
-    # where `min_fee` is the minimum fee enfoced by the netwrok, and
+    # where `min_fee` is the minimum fee enforced by the network, and
     # `num_bytes` is the size of the transaction. Setting the `fee` to zero
     # means the minimum is used.
     params.fee = 0
     txn = PaymentTxn(
-        sender=from_address,
+        sender=sender,
         sp=params,
-        receiver=to_address,
+        receiver=receiver,
         amt=ag.util.algos_to_microalgos(1),
         note=note,
     )
-
-    # Sign the transaction, letting `kmd` manage the private key.
-    with ptu.clients.get_wallet_handle(kmd_client, wallet_id, "") as handle:
-        txn = kmd_client.sign_transaction(handle, "", txn)
+    # looksup the sender address in the wallet and uses its key to sign
+    signed_txn = wallet.sign_transaction(txn)
 
     # Send the transaction and wait for it to be confirmed.
-    txid = algod_client.send_transaction(txn)
+    txid = algod_client.send_transaction(signed_txn)
     print(f"  transaction ID: {txid}")
     print("  waiting for confirmation...")
-    txn = ptu.transactions.get_confirmed_transaction(algod_client, txid, 4)
+    signed_txn = ptu.transactions.get_confirmed_transaction(algod_client, txid, 4)
 
     # Verify the account balances have changed.
     print("Balances:")
-    to_account_info = algod_client.account_info(to_address)
-    from_account_info = algod_client.account_info(from_address)
+    to_account_info = algod_client.account_info(receiver)
+    from_account_info = algod_client.account_info(sender)
     print(
         "  from: {:.6f} Algos".format(
             ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
