@@ -31,7 +31,7 @@ algod_client = ptu.clients.build_algod_local_client(node_data_dir)
 kmd_client = ptu.clients.build_kmd_local_client(node_data_dir)
 ```
 
-The `build_X_local_client` functions simply lookup the client network address and access token in the node data directory,
+The build local client functions simply lookup the client network address and access token in the node data directory,
 and construct the `algosdk.v2client.algod.AlgodClient` and `algosdk.kmd.KMDClient` objects.
 
 ## Using the Key Management Daemon
@@ -42,17 +42,14 @@ The following code snippet looks up the wallet id as managed by `kmd`,
 and then makes a request to `kmd` to get the first account's address in the wallet.
 
 ```python
-wallet_id = ptu.clients.get_wallet_id(kmd_client=kmd_client, name=wallet_name)
-with ptu.clients.get_wallet_handle(kmd_client, wallet_id, password) as handle:
-    keys = kmd_client.list_keys(handle)
-    address = keys[0]
+wallet = ag.wallet.Wallet(wallet_name, password, kmd_client)
+sender = wallet.list_keys()[0]
 ```
 
 Then, to sign a transaction:
 
 ```python
-with ptu.clients.get_wallet_handle(kmd_client, wallet_id, password) as handle:
-    signed_txn = kmd_client.sign_transaction(handle, password, txn)
+signed_txn = wallet.sign_transaction(txn)
 ```
 
 The `get_wallet_id` function simply asks `kmd` for all wallets,
