@@ -54,10 +54,10 @@ That's roughly equivalent to 30 gaming computers.
 {::nomarkdown}<center>{%- include svgs/blockchain.svg -%}</center>{:/}
 
 Blockchain technologies are protocols which facilitate distributed computing.
-They allow many nodes in a network to agree on some shared state (a ledger),
+They allow many nodes in a network to agree on some shared state (e.g. ledger),
 under some allowed state transition rules.
 The rules could be part of the protocol (e.g. UTXO),
-or could be programs stored on the ledger (i.e. smart contracts).
+or could be programs stored on the ledger (e.g. smart contracts).
 
 Proof-of-work technologies rely on proving that some computational work has been done,
 to give priority to whichever state which has more backing (in the form of work).

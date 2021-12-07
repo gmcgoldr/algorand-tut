@@ -3,8 +3,6 @@ layout: page
 title: Configuration
 ---
 
-# Configuration
-
 The following explains how to install and configure your system to build and test smart contracts.
 
 ## Key terms
