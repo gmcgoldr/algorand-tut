@@ -70,7 +70,7 @@ def main(node_data_dir: Path):
     txid = algod_client.send_transaction(signed_txn)
     print(f"  transaction ID: {txid}")
     print("  waiting for confirmation...")
-    signed_txn = ptu.transactions.get_confirmed_transaction(algod_client, txid, 4)
+    txn_info = ptu.transactions.get_confirmed_transaction(algod_client, txid, 4)
 
     # Verify the account balances have changed.
     print("Balances:")

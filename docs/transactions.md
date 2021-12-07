@@ -152,7 +152,7 @@ The object describes:
 - some duration over which the transaction is valid,
   and after which if the transaction isn't executed then it is dropped from the network
 
-The `fee` and `flat_fee` members are used to specify the fees paid to get the transaction committed.
+The `fee` and `flat_fee` members are used to specify the fees paid to get the transaction confirmed.
 The actual fee is calculated as follows where `min_fee` is the minimum transaction fee,
 and `num_bytes` is the number of bytes for the packed signed transaction.
 The last row follows from the previous,
@@ -164,14 +164,14 @@ and is added here just for clarity.
 | `x` | `False` | `max(min_fee, x * num_bytes)` |
 | `0` | `False` | `min_fee` |
 
-The `first` and `last` members specify a range of rounds in which the transaction must be committed,
+The `first` and `last` members specify a range of rounds in which the transaction must be confirmed,
 otherwise it is dropped.
 The round is a counter which increases each time a block is committed.
 In its current configuration,
 the network commits a block every `4.5` seconds on average,
 but this will probably be reduced with network upgrades.
 
-Calling `AlgodClient.suggested_parmas` will default to a non-flat fee,
+Calling `AlgodClient.suggested_params` will default to a non-flat fee,
 with `fee` set to the network minimum fee.
 This means the transaction fee will scale with the transaction size,
 and while the network is not congested you can either set `flat_fee` to `True`,
@@ -182,3 +182,50 @@ and the `last` round will be offset by the maximum transaction life.
 The minimum transaction fee,
 and maximum transaction life (number of valid rounds) can be found here:
 <https://developer.algorand.org/docs/get-details/parameter_tables/>.
+
+## Sending a transaction
+
+A transaction must be signed before it can be sent to the network.
+It is a protocol-level rule that transactions must be signed by the sender.
+
+A transaction can be signed by the appropriate private key in a wallet if the sender is an account in the wallet:
+
+```python
+signed_txn = wallet.sign_transaction(txn)
+```
+
+Or directly using the private key:
+
+```python
+signed_txn = txn.sign(private_key)
+```
+
+The resulting signed transaction is a `future.transaction.SignedTransaction` object,
+which wraps the original transaction alongside the signature data.
+
+The transaction is sent using the `AlgodClient`:
+
+```python
+txid = algod_client.send_transaction(signed_txn)
+```
+
+At this point, the transaction is in the network,
+and is identified by its id `txid` (base64 encoded transaction hash).
+It will remain in the network until it can be included in a block,
+at which point it will be confirmed.
+
+Waiting for a transaction to be confirmed is a common operation,
+as seen in this snippet:
+
+```python
+txn_info = ptu.transactions.get_confirmed_transaction(
+    algod_client,
+    txid,
+    wait_rounds
+)
+```
+
+The `AlgodClient.status_after_block` method is used to block the thread until the client reports a new block.
+This can be used in a loop to query the transaction information at each block until it is seen to be confirmed.
+The transaction information can be queried with `AlgodClient.pending_transaction_info`. The resulting object's schema can be found at:
+<https://developer.algorand.org/docs/rest-apis/algod/v2/#pendingtransactionresponse>.
