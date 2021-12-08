@@ -60,3 +60,9 @@ title: Glossary
 - **Smart contract**:
   some logic stored on the ledger,
   which is used to specify rules about which ledger state transitions are allowed.
+
+- **Application** (app, dApp):
+  service with some state and rules stored on the ledger.
+  Typically, the application can have a front-end distributed to users,
+  a back-end consisting of smart-contracts,
+  and further back-end functionality deployed in some kind of data-center.
