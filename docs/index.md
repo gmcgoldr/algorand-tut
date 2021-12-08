@@ -61,18 +61,18 @@ The rules could be part of the protocol (e.g. UTXO),
 or could be programs stored on the ledger (e.g. smart contracts).
 
 Proof-of-work technologies rely on proving that some computational work has been done,
-to give priority to whichever state which has the most backing (in the form of work).
+to give priority to whichever state has the most backing (in the form of work).
 This is used to decide which fork of the ledger is the correct one,
 and can be seen as a way to order transactions.
 
-> A fork occurs when, after some state s1 is confirmed,
-two new states s2 and s3 are proposed which are both compatible with s1,
+> A fork occurs when, after some state X is confirmed,
+two new states Y and Y' are proposed which are both compatible with X,
 but are incompatible with one-another.
-Double-spending is a classic example of this situation:
-in state s1, Alice has 1 coin.
-Alice announces a transaction in which she pays Bob, resulting in s2.
-At the same time, she announces a transaction in which she pays Charlie, resulting in state s3.
-The network must choose to continue either from s2 and discard s3, or vice versa.
+Double-spending is an example of this situation:
+in state X, Alice has 1 coin.
+Alice proposes to pay Bob her 1 coin, resulting in state Y.
+At the same time, she proposes to pays Charlie her 1 coin, resulting in state Y'.
+The network must choose to confirm Y and discard Y', or vice versa.
 
 Proof-of-stake is a bit of a misnomer as there isn't much proving happening.
 Instead, the stake is used to weight participation in some Byzantine fault tolerant protocol.

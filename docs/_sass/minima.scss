@@ -81,3 +81,10 @@ a:hover {
     color: $background-color
   }
 }
+
+blockquote {
+    color: $grey-color;
+    font-size: inherit;
+    letter-spacing: inherit;
+    font-style: inherit;
+}
