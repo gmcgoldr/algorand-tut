@@ -4,7 +4,7 @@ title: Introduction
 ---
 
 This tutorial covers the development of Algorand stateful apps (smart contracts) in a Python environment.
-It was developed in tandem with the [`pyteal-utils`](https://github.com/gmcgoldr/pyteal-utils) package and will frequently refer to it.
+It was developed in tandem with the [`algo-app-dev`](https://github.com/gmcgoldr/algo-app-dev) package and will frequently refer to it.
 The source code shown in this tutorial can be found at <https://github.com/gmcgoldr/algorand-tut>.
 
 The tutorial will guide you through:

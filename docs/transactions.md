@@ -5,18 +5,18 @@ title: Transactions
 
 The following explains how to use the Python SDK to create, execute and inspect transactions.
 The associated code can be found in `demo-transfer.py`.
-The `ptu` module here refers to `pyteal-utils`,
+The `aad` module here refers to `algoappdev`,
 as imported in `demo-transfer.py`.
 
 ## Running the code
 
 ```bash
 # start the algod and kmd daemons
-sudo -u algorand ptu-run-node private_dev start
+sudo -u algorand aad-run-node private_dev start
 # run the demo
 sudo -u algorand ./demo-transfer.py /var/lib/algorand/nets/private_dev/Primary
 # stop the daemons to cleanup background processes
-sudo -u algorand ptu-run-node private_dev stop
+sudo -u algorand aad-run-node private_dev stop
 ```
 
 ## Daemon clients
@@ -27,8 +27,8 @@ and to the `kmd` daemon,
 to access the funds in the genesis account.
 
 ```python
-algod_client = ptu.clients.build_algod_local_client(node_data_dir)
-kmd_client = ptu.clients.build_kmd_local_client(node_data_dir)
+algod_client = aad.clients.build_algod_local_client(node_data_dir)
+kmd_client = aad.clients.build_kmd_local_client(node_data_dir)
 ```
 
 The build local client functions simply lookup the client network address and access token in the node data directory,
@@ -215,7 +215,7 @@ Waiting for a transaction to be confirmed is a common operation,
 as seen in this snippet:
 
 ```python
-txn_info = ptu.transactions.get_confirmed_transaction(
+txn_info = aad.transactions.get_confirmed_transaction(
     algod_client,
     txid,
     wait_rounds

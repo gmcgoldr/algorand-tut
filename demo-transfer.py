@@ -3,13 +3,13 @@
 from pathlib import Path
 
 import algosdk as ag
-import pyteal_utils as ptu
+import algoappdev as aad
 from algosdk.future.transaction import PaymentTxn
 
 
 def main(node_data_dir: Path):
-    algod_client = ptu.clients.build_algod_local_client(node_data_dir)
-    kmd_client = ptu.clients.build_kmd_local_client(node_data_dir)
+    algod_client = aad.clients.build_algod_local_client(node_data_dir)
+    kmd_client = aad.clients.build_kmd_local_client(node_data_dir)
 
     # get the address of the first account in the wallet
     wallet = ag.wallet.Wallet("unencrypted-default-wallet", "", kmd_client)
@@ -70,7 +70,7 @@ def main(node_data_dir: Path):
     txid = algod_client.send_transaction(signed_txn)
     print(f"  transaction ID: {txid}")
     print("  waiting for confirmation...")
-    txn_info = ptu.transactions.get_confirmed_transaction(algod_client, txid, 4)
+    txn_info = aad.transactions.get_confirmed_transaction(algod_client, txid, 4)
 
     # Verify the account balances have changed.
     print("Balances:")

@@ -93,10 +93,10 @@ It's documentation is found at:
 ### Install PyTeal Utils
 
 ```bash
-sudo pip install -U pyteal-utils[dev]
+sudo pip install -U algo-app-dev[dev]
 ```
 
-This command installs `pyteal-utils` from PyPI,
+This command installs `algo-app-dev` from PyPI,
 and downloads the dev dependencies (needed for testing).
 
 NOTE: it is recommended to install this package globally (using `sudo`),
@@ -176,7 +176,7 @@ Some notes on those choices:
   given that no other nodes need to connect to the network.
 
 To create the private dev network (which will be used subsequently),
-run the `pyteal-utils` command `sudo -u algorand ptu-make-node private_dev`.
+run the `algo-app-dev` command `sudo -u algorand aad-make-node private_dev`.
 
 In effect, it runs these two commands:
 
@@ -223,10 +223,10 @@ sudo -u algorand goal -d $node_data_dir node start
 sudo -u algorand goal -d $node_data_dir kmd start
 ```
 
-This can also be done with the `pyteal-utils` command:
+This can also be done with the `algo-app-dev` command:
 
 ```bash
-sudo -u algorand ptu-run-node private_dev start
+sudo -u algorand aad-run-node private_dev start
 ```
 
 ### Data directory
