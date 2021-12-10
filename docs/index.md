@@ -27,8 +27,10 @@ You can skip ahead to the [configuration]({{ site.baseurl }}{% link configuratio
 Algorand is a proof-of-stake blockchain with smart contract functionality.
 
 As a developer, it is attractive because the technology so far is proving robust,
-its smart contract language avoids pitfalls discovered in precursor technologies,
-and it is operationally simple enough that a node can be run on commodity hardware.
+its smart contract infrastructure avoids many
+[pitfalls](https://consensys.github.io/smart-contract-best-practices/known_attacks/) discovered in precursor technologies,
+and it is operationally simple enough that a node can be run on a
+[Raspberry Pi](https://developer.algorand.org/tutorials/development-on-algorand-using-raspberry-pi-part-1/).
 
 As a blockchain technology, it also demonstrates some good qualities:
 
@@ -40,13 +42,14 @@ As a blockchain technology, it also demonstrates some good qualities:
   - the block rewards are distributed to the entire network not just the validators
   - the barrier to entry for running a node is very low
 
-The protocol sufficiently efficient that it can run on a [Raspberry Pi](https://developer.algorand.org/tutorials/development-on-algorand-using-raspberry-pi-part-1/).
-This makes the Algorand network very power efficient.
+The protocol's efficiency,
+while primarily addressing decentralization,
+also makes the network very power efficient.
 As of writing, using the numbers available on the [dashboard](https://metrics.algorand.org/),
 and assuming about 10 W of energy per node
 (e.g. when sharing resources in a [data center](https://medium.com/teads-engineering/estimating-aws-ec2-instances-power-consumption-c9745e347959),
 or when running on a Raspberry Pi)
-then the entire validation network could be consuming as little as 15 kW of energy.
+the entire validation network could be consuming as little as 15 kW of energy.
 That's less power consumption than two typical American households.
 
 ### Blockchain
