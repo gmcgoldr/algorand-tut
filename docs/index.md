@@ -40,15 +40,14 @@ As a blockchain technology, it also demonstrates some good qualities:
   - the block rewards are distributed to the entire network not just the validators
   - the barrier to entry for running a node is very low
 
-The protocol is so efficient that it can run on a [Raspberry Pi](https://developer.algorand.org/tutorials/development-on-algorand-using-raspberry-pi-part-1/).
-This helps with decentralization, as nearly anyone can run a node.
-But it also makes Algorand very power efficient.
+The protocol sufficiently efficient that it can run on a [Raspberry Pi](https://developer.algorand.org/tutorials/development-on-algorand-using-raspberry-pi-part-1/).
+This makes the Algorand network very power efficient.
 As of writing, using the numbers available on the [dashboard](https://metrics.algorand.org/),
 and assuming about 10 W of energy per node
 (e.g. when sharing resources in a [data center](https://medium.com/teads-engineering/estimating-aws-ec2-instances-power-consumption-c9745e347959),
 or when running on a Raspberry Pi)
-then the entire validation network is currently consuming about 15 kW of energy.
-That's roughly equivalent to 30 gaming computers.
+then the entire validation network could be consuming as little as 15 kW of energy.
+That's less power consumption than two typical American households.
 
 ### Blockchain
 
