@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from algoappdev import *
+from algoappdev.apps import AppBuilder
 from algoappdev.utils import AccountMeta
 from algosdk.encoding import decode_address, encode_address
 from algosdk.future.transaction import ApplicationNoOpTxn, ApplicationOptInTxn
@@ -56,6 +57,20 @@ def main(node_data_dir: Path):
     # wait until the transactions have been confirmed
     transactions.get_confirmed_transactions(algod_client, txn_ids, testing.WAIT_ROUNDS)
 
+    # adding credentials: setting the name
+    txn_ids: List[str] = []
+    for name in names:
+        print(f"adding credentials for {name}")
+        txn = ApplicationNoOpTxn(
+            accounts[name].address,
+            algod_client.suggested_params(),
+            app.app_id,
+            [b"set_name", name.encode("utf8")],
+        )
+        txn_ids.append(algod_client.send_transaction(txn.sign(accounts[name].key)))
+    # wait until the transactions have been confirmed
+    transactions.get_confirmed_transactions(algod_client, txn_ids, testing.WAIT_ROUNDS)
+
     # create a graph of vouches
     vouches = [
         ("alice", "bob"),
@@ -90,7 +105,7 @@ def main(node_data_dir: Path):
                 [
                     "vouch_from",
                     decode_address(accounts[name_1].address),
-                    app_builder.local_state.key_info(vouch_idx).key,
+                    app_builder.local_state.key_info(f"voucher_{vouch_idx}").key,
                 ],
             ),
         )
@@ -100,17 +115,27 @@ def main(node_data_dir: Path):
     # wait until the transactions have been confirmed
     transactions.get_confirmed_transactions(algod_client, txn_ids, testing.WAIT_ROUNDS)
 
+    # get the names as stored in the app credentials
+    address_to_name = {
+        a.address: clients.get_app_local_key(
+            algod_client.account_info(a.address),
+            app.app_id,
+            app_builder.local_state.key_info("name").key,
+        )
+        for a in accounts.values()
+    }
+
     # extract vouch information from the accounts
     print("\nParticipants:")
     address_to_name = {a.address: n for n, a in accounts.items()}
     for name in names:
         account = accounts[name]
         vouchers = []
-        for key in range(MAX_VOUCHERS):
+        for vouch_idx in range(MAX_VOUCHERS):
             voucher_address = clients.get_app_local_key(
                 algod_client.account_info(account.address),
                 app.app_id,
-                app_builder.local_state.key_info(key).key,
+                app_builder.local_state.key_info(f"voucher_{vouch_idx}").key,
             )
             if not voucher_address:
                 continue
