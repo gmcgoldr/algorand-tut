@@ -9,5 +9,6 @@ You can run the tutorial code with these steps:
 ./install.sh
 sudo -u algorand aad-run-node private_dev start
 sudo -u algorand ./demo-transfer.py /var/lib/algorand/nets/private_dev/Primary
+sudo -u algorand pytest tests_app_vouch.py
 sudo -u algorand aad-run-node private_dev stop
 ```
