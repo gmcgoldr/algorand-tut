@@ -4,23 +4,11 @@ title: Introduction
 ---
 
 This tutorial covers the development of Algorand stateful apps (smart contracts) in a Python environment.
-It was developed in tandem with the [`algo-app-dev`](https://github.com/gmcgoldr/algo-app-dev) package and will frequently refer to it.
-The source code shown in this tutorial can be found at <https://github.com/gmcgoldr/algorand-tut>.
+This introduction provides a non-technical overview of blockchain and smart contract concepts,
+to help situate Algorand in the field.
 
-The tutorial will guide you through:
-
-1. [Configuration]({{ site.baseurl }}{% link configuration.md %}):
-   setting up a development environment
-2. [Transactions]({{ site.baseurl }}{% link transactions.md %}):
-   building and sending a transaction to the network.
-3. [Applications]({{ site.baseurl }}{% link applications.md %}):
-   building an application (smart contract) and transacting with it.
-4. [Testing]({{ site.baseurl }}{% link testing.md %}):
-   testing the application logic.
-
-This introduction is a non-technical overview of blockchain and smart contract concepts,
-meant to help motivate the contents of the tutorial.
-You can skip ahead to the [configuration]({{ site.baseurl }}{% link configuration.md %}) section to get right into the code.
+The tutorial source code shown can be found at <https://github.com/gmcgoldr/algorand-tut>.
+You can skip ahead to the [configuration]({{ site.baseurl }}{% link configuration.md %}) section to get into the code.
 
 ## Algorand
 
@@ -29,7 +17,7 @@ Algorand is a proof-of-stake blockchain with smart contract functionality.
 As a developer, it is attractive because the technology so far is proving robust,
 its smart contract infrastructure avoids many
 [pitfalls](https://consensys.github.io/smart-contract-best-practices/known_attacks/) discovered in precursor technologies,
-and it is operationally simple enough that a node can be run on a
+and it is operationally simple enough that a full node can be run on a
 [Raspberry Pi](https://developer.algorand.org/tutorials/development-on-algorand-using-raspberry-pi-part-1/).
 
 As a blockchain technology, it also demonstrates some good qualities:
@@ -43,7 +31,7 @@ As a blockchain technology, it also demonstrates some good qualities:
   - the barrier to entry for running a node is very low
 
 The protocol's efficiency,
-while primarily addressing decentralization,
+while primarily addressing decentralization and throughput,
 also makes the network very power efficient.
 As of writing, using the numbers available on the [dashboard](https://metrics.algorand.org/),
 and assuming about 10 W of energy per node
@@ -56,16 +44,18 @@ That's less power consumption than two typical American households.
 
 {::nomarkdown}<center>{%- include svgs/blockchain.svg -%}</center>{:/}
 
-Blockchain technologies are protocols which facilitate distributed computing.
+Blockchain technologies are protocols which implement some form of distributed computing.
 They allow many nodes in a network to agree on some shared state (e.g. ledger),
-under some allowed state transition rules.
+under some allowed set of transition rules.
 The rules could be part of the protocol (e.g. UTXO),
 or could be programs stored on the ledger (e.g. smart contracts).
 
-Proof-of-work technologies rely on proving that some computational work has been done,
-to give priority to whichever state has the most backing (in the form of work).
-This is used to decide which fork of the ledger is the correct one,
-and can be seen as a way to order transactions.
+For typical proof-of-work (PoW) protocols,
+proof that some computational work has been done is used to randomly select a leader node,
+which will send a new block of transactions to the network.
+Two (or more) nodes could propose different blocks at the same time,
+resulting in a fork of the ledger.
+The nodes agree that whichever version of the ledger has the most backing (computation work) is accepted as the correct one.
 
 > A fork occurs when, after some state X is confirmed,
 two new states Y and Y' are proposed which are both compatible with X,
@@ -76,17 +66,16 @@ Alice proposes to pay Bob her 1 coin, resulting in state Y.
 At the same time, she proposes to pays Charlie her 1 coin, resulting in state Y'.
 The network must choose to confirm Y and discard Y', or vice versa.
 
-Proof-of-stake is a bit of a misnomer as there isn't much proving happening.
-Instead, the stake is used to weight participation in some Byzantine fault tolerant protocol.
-In the case of Algorand the protocol doesn't fork.
-This means that the ordering problem is addressed without using proof-of-work.
+For typical proof-of-stake (PoS) protocols,
+each node's stake is used to weight participation in some Byzantine fault tolerant protocol.
+Ethereum's Casper protocol was heavily inspired by Bitcoin's leader selection.
+But the protocol requires many amendments in lieu of the PoW-based fork resolution.
+More recent PoS blockchains tend to be built on protocols which have little in common with Bitcoin.
+The Algorand protocol uses random sortition to select a leader in a manner which doesn't introduce forks.
 
-Cryptocurrency is probably the most famous use case for such a network.
-In the case of Bitcoin, the network was designed for exactly this purpose,
-and the protocol enforces the rules of currency:
-a coin can be owned by a single entity at a time,
-and only the owner of a coin can approve its transfer.
-
+In effect,
+a blockchain allows many nodes to transact on a decentralized database,
+without having to trust one-another or a third party.
 While centralized databases are simpler and more efficient to operate,
 blockchains can be said to be:
 

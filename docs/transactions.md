@@ -38,7 +38,7 @@ and construct the `algosdk.v2client.algod.AlgodClient` and `algosdk.kmd.KMDClien
 
 In normal operations,
 your account private keys will be managed by a wallet and accessed with `kmd`.
-The following code snippet looks up the wallet id as managed by `kmd`,
+The following code snippet looks up a wallet in `kmd`,
 and then makes a request to `kmd` to get the first account's address in the wallet.
 
 ```python
@@ -52,13 +52,6 @@ Then, to sign a transaction:
 signed_txn = wallet.sign_transaction(txn)
 ```
 
-The `get_wallet_id` function simply asks `kmd` for all wallets,
-iterates over the resulting objects (dicts),
-and returns the `id` property of that which matches the given name.
-
-The `get_wallet_handle` function is a context manager which calls the
-`init_wallet_handle` and `release_wallet_handle` methods of the `KMDClient`.
-
 In this demo,
 the `KMDClient` is used only to interact with the account added to the default wallet at genesis.
 A new wallet can be created with `KMDClient.create_wallet`,
@@ -71,7 +64,7 @@ It is also possible to generate a standalone account.
 In fact, an account is just the 32-byte public key in an Ed25519 public / private key pair.
 So, in theory, any implementation of Ed25519 can "create" an account.
 
-But be very careful: if you provide an address to the Algorand network for which there is no private key,
+But be very careful: if you provide an address to the Algorand network for which there is no known private key,
 then any assets sent to that address are lost forever.
 
 To generate a standalone account:
@@ -124,11 +117,11 @@ txn = PaymentTxn(
 
 The Python SDK contains objects which help configure the various transaction types
 Here `algosdk.future.transaction.PaymentTxn` is used to create a payment.
-Some of the arguments are self-evident:
+Some of the parameters are self-evident:
 `sender` is the address of the sender,
 `receiver` is the address of the receiver,
 `amt` is the amount of *microAlgos* to send.
-The `note` argument can include up to 1 KB of raw data (byte slice) to be sent along with the transaction.
+The `note` parameter is used to attach up to 1 KB of raw data (byte slice) to the transaction.
 
 More arguments can be passed,
 such as the lease, rekey address, and close out address.
@@ -136,7 +129,7 @@ These topics aren't covered in this tutorial.
 
 ### Suggested parameters
 
-The `sp` argument, which stands for suggested parameters,
+The `sp` parameter, which stands for suggested parameters,
 is an object which contains information about how the transaction should be handled by the network.
 The `AlgodClient.suggested_params` method builds such an object,
 and populates it with sensible defaults based on the current state of the network.
@@ -183,8 +176,6 @@ and maximum transaction life (number of valid rounds) can be found here:
 ## Sending a transaction
 
 A transaction must be signed before it can be sent to the network.
-It is a protocol-level rule that transactions must be signed by the sender.
-
 A transaction can be signed by the appropriate private key in a wallet if the sender is an account in the wallet:
 
 ```python
