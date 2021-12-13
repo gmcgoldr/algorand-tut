@@ -131,3 +131,5 @@ Which is all well and good as Grace, Erin and Frank are bots colluding to give t
 And fooling Charlie isn't enough to establish credibility in the eyes of Alice.
 
 This tutorial will cover the steps required to build such a smart contract.
+
+Next in the tutorial: [configuration]({{ site.baseurl }}{% link configuration.md %}).

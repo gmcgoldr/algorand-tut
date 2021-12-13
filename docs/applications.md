@@ -386,3 +386,5 @@ txns = transactions.group_txns(
 
 Finally he will send Alice's transaction to her, and have her sign it.
 Then he can send the transactions to the network.
+
+Next in the tutorial: [testing]({{ site.baseurl }}{% link testing.md %}).

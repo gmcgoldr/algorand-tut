@@ -217,3 +217,5 @@ The `AlgodClient.status_after_block` method is used to block the thread until th
 This can be used in a loop to query the transaction information at each block until it is seen to be confirmed.
 The transaction information can be queried with `AlgodClient.pending_transaction_info`. The resulting object's schema can be found at:
 <https://developer.algorand.org/docs/rest-apis/algod/v2/#pendingtransactionresponse>.
+
+Next in the tutorial: [applications]({{ site.baseurl }}{% link applications.md %}).
