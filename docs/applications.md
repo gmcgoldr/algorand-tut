@@ -14,12 +14,14 @@ This is a transaction with the `TxType` field set to the `appl` variant.
 Other transaction types such as payments, asset minting etc. are not discussed here.
 
 Application call transactions can be constructed with
-`py-algorand-sdk` in the following ways:
+`py-algorand-sdk` in as follows:
 
 ```python
 future.transaction.Transaction(txn_type=constants.appcall_txn)
-future.transaction.ApplicationCallTxn()
 ```
+
+There are also a variety of `future.transaction.Application...` objects which are derived from `Transaction`,
+and which set `txn_type=constants.appcall_txn` during construction.
 
 ## Application context
 
@@ -88,7 +90,7 @@ The app state can be accessed with the methods:
 
 The first two expressions return the state value and work only for the current app.
 The last two expressions return an object `MaybeValue` which is itself an expression.
-When executed, it retrieves two values: whether or not the key was found, and its value
+When executed, it constructs two values: whether or not the key was found, and its value
 (or default value if not found).
 Then, those values can be accessed with expressions: `maybe.value()`, `maybe.hasValue()`.
 
@@ -149,13 +151,13 @@ and possibly a default value.
 
 A `State` object is used to:
 
-- set and get a state value in the app logic
-- build the app an expression to set default values (constructor)
+- build expressions to set and get a state value
+- build an expression to set default values (constructor)
 - build the app schema which defines how much space the app can use
 
 The `StateGlobalExternal` subclass of `State` is used to describe the global state for an external app
 (i.e. any app whose id is in the `Txn.applications` array).
-It can get values, but cannot set them as external apps are accessible in read-only mode.
+It can get values, but cannot set them as external apps read-only.
 
 The `StateGlobal` subclass of `StateGlobalExternal` is used to describe the global state for the current app.
 It adds the ability to set values in the state.
@@ -168,6 +170,11 @@ In this demo application,
 each account has a name associated with it (the credential),
 and up to 8 accounts can vouch for that credential.
 The local storage is comprised of the name, and 8 voucher addresses.
+
+TEAL stack values (and consequently state values) are either of type `Bytes` or `Int`.
+The `Bytes` type represents a byte slice, and can be used to represent arbitrary binary data.
+Strings and addresses are encoded as byte slices.
+The `Int` type represents an unsigned 64-bit integer.
 
 ```python
 # the state consists of 8 indices each for a voucher address
@@ -203,7 +210,7 @@ The creation branch is invoked when the app ID is zero,
 which happens only when a call is made to an app not yet on the chain.
 
 A `NoOp` call with an argument at index 0 which matches an invocation name will invoke that branch.
-A `NoOp` call without an argument at index 0,
+A `NoOp` call without no argument at index 0,
 or an argument which doesn't match any invocation name,
 will invoke the default invocation branch.
 
@@ -231,16 +238,8 @@ The solution is to make the logic of writing a new vouch conditional on two tran
 voucher_txn = Gtxn[Txn.group_index() - Int(1)]
 # the 3rd argument of the vouchee txn is the index to write to
 vouch_key = Txn.application_args[2]
-vouch_idx = Btoi(vouch_key)
-
-# the previous txn in the group is that sent by the voucher
-voucher_txn = Gtxn[Txn.group_index() - Int(1)]
-# the 3rd argument of the vouchee txn is the index to write to
-vouch_key = Txn.application_args[2]
 # valid vouch keys
-vouch_keys = [
-    Bytes(state.key_info(f"voucher_{i}").key) for i in range(MAX_VOUCHERS)
-]
+vouch_keys = [Bytes(f"voucher_{i}") for i in range(MAX_VOUCHERS)]
 
 builder = apps.AppBuilder(
     invocations={

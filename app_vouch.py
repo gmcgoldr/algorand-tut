@@ -19,9 +19,7 @@ def build_app() -> apps.AppBuilder:
     # the 3rd argument of the vouchee txn is the index to write to
     vouch_key = Txn.application_args[2]
     # valid vouch keys
-    vouch_keys = [
-        Bytes(state.key_info(f"voucher_{i}").key) for i in range(MAX_VOUCHERS)
-    ]
+    vouch_keys = [Bytes(f"voucher_{i}") for i in range(MAX_VOUCHERS)]
 
     return apps.AppBuilder(
         invocations={
