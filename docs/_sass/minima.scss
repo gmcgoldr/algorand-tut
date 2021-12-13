@@ -61,6 +61,10 @@ a:hover {
 
 .site-nav .page-link {
   color: $background-color;
+
+  @include media-query($on-palm) {
+    color: $text-color;
+  }
 }
 
 .site-title, .site-repo {
