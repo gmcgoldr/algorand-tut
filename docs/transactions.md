@@ -5,18 +5,20 @@ title: Transactions
 
 The following explains how to use the Python SDK to create, execute and inspect transactions.
 The associated code can be found in `demo-transfer.py`.
-The `aad` module here refers to `algoappdev`,
+The `aad` module here refers to `algo-app-dev`,
 as imported in `demo-transfer.py`.
 
 ## Running the code
 
 ```bash
+# build a new private network (overwrite)
+aad-make-node nets/private_dev -f
 # start the algod and kmd daemons
-sudo -u algorand aad-run-node private_dev start
+aad-run-node nets/private_dev start
 # run the demo
-sudo -u algorand ./demo-transfer.py /var/lib/algorand/nets/private_dev/Primary
+./demo-transfer.py /var/lib/algorand/nets/private_dev/Primary
 # stop the daemons to cleanup background processes
-sudo -u algorand aad-run-node private_dev stop
+aad-run-node nets/private_dev stop
 ```
 
 ## Daemon clients

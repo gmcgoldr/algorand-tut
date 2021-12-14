@@ -14,7 +14,7 @@ algo-app-dev and its testing module are imported into the namespace
 The `algoappdev.testing` module includes some useful fixtures for testing apps with `pytest`.
 
 Set the environment variable `AAD_NODE_DIR` to the node's data directory
-(e.g. `/var/lib/algorand/nets/private_dev/Primary`).
+(e.g. `nets/private_dev/Primary`).
 Then, the fixtures can be used to quickly access get the
 `algod_client`, `kmd_client`, and a `funded_account`.
 

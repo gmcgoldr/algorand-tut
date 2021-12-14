@@ -72,38 +72,21 @@ sudo apt-get install algorand
 The `algorand` package contains the Algorand node implementation,
 and CLI tools to configure and interact with the networks and nodes.
 
-### Install the SDK
-
-Install python dependencies
-(as the `algorand` user which will be running the python scripts):
-
-```bash
-sudo -u algorand pip install -r requirements.txt
-```
-
-NOTE: `sudo -u algorand` will be used frequently to interact with the operating
-system as the `algorand` user. The home directory of this account is set to
-`/var/lib/algorand` during installation which conveniently means `algorand`
-related configuration (e.g. the python libraries) are installed in that location.
-
 The `goal` CLI is included in the `algorand` package and is fairly ubiquitous.
 It's documentation is found at:
 <https://developer.algorand.org/docs/reference/cli/goal/goal/>.
 
-### Install PyTeal Utils
+### Install python packages
 
 ```bash
-sudo pip install -U algo-app-dev[dev]
+pip install -U py-algorand-sdk pyteal algo-app-dev[dev]
 ```
 
-This command installs `algo-app-dev` from PyPI,
-and downloads the dev dependencies (needed for testing).
+This command installs:
 
-NOTE: it is recommended to install this package globally (using `sudo`),
-since this means both your account,
-and the `algorand` account have access to the package libraries and binaries.
-It is possible to install it in a virtual environment,
-but in this case some additional system configuration is required to ensure the `algorand` account has access to the virtual environment.
+- `py-algorand-sdk`: the Algorand python SDK
+- `pyteal`: the Algorand python package to build TEAL programs
+- `algo-app-dev`: a non-official package with utilities to assist in developing Algorand apps
 
 ## Create a node
 
@@ -161,6 +144,7 @@ This template instructs `goal` to setup node data with:
 - the account has 100% of the stake,
 - the account is online meaning it is available for participating in consensus,
 - a single node in the network,
+- the node data will be stored in the `Primary` sub-directory,
 - the node can serve as a relay for other nodes,
 - the node hosts the wallet `Wallet1`,
 - the keys in `Wallet1` can participate in both consensus as well as transactions.
@@ -176,7 +160,7 @@ Some notes on those choices:
   given that no other nodes need to connect to the network.
 
 To create the private dev network (which will be used subsequently),
-run the `algo-app-dev` command `sudo -u algorand aad-make-node private_dev`.
+run the `algo-app-dev` command `aad-make-node nets/private_dev`.
 
 In effect, it runs these two commands:
 
@@ -219,14 +203,14 @@ However, for testing purposes, and for environments lacking `systemd` (e.g. WSL2
 it can be useful to start the node daemons directly using `goal`:
 
 ```bash
-sudo -u algorand goal -d $node_data_dir node start
-sudo -u algorand goal -d $node_data_dir kmd start
+goal -d $node_data_dir node start
+goal -d $node_data_dir kmd start
 ```
 
 This can also be done with the `algo-app-dev` command:
 
 ```bash
-sudo -u algorand aad-run-node private_dev start
+aad-run-node nets/private_dev start
 ```
 
 ### Data directory
