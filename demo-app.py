@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Dict, List
 
 from algoappdev import *
-from algoappdev.utils import AccountMeta
 from algosdk.encoding import decode_address, encode_address
 from algosdk.future.transaction import ApplicationNoOpTxn, ApplicationOptInTxn
 from algosdk.util import algos_to_microalgos
@@ -23,7 +22,7 @@ def main(node_data_dir: Path):
 
     # fund the accounts
     txn_ids: List[str] = []
-    accounts: Dict[str, AccountMeta] = {}
+    accounts: Dict[str, utils.AccountMeta] = {}
     for name in names:
         print(f"funding {name}")
         account, txid = transactions.fund_from_genesis(
@@ -64,7 +63,7 @@ def main(node_data_dir: Path):
             accounts[name].address,
             algod_client.suggested_params(),
             app.app_id,
-            [b"set_name", name.encode("utf8")],
+            ["set_name", name.encode("utf8")],
         )
         txn_ids.append(algod_client.send_transaction(txn.sign(accounts[name].key)))
     # wait until the transactions have been confirmed

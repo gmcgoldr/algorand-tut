@@ -2,17 +2,20 @@
 
 from pathlib import Path
 
-import algoappdev as aad
-import algosdk as ag
+from algoappdev import *
+from algosdk.account import generate_account
 from algosdk.future.transaction import PaymentTxn
+from algosdk.mnemonic import from_private_key
+from algosdk.util import algos_to_microalgos, microalgos_to_algos
+from algosdk.wallet import Wallet
 
 
 def main(node_data_dir: Path):
-    algod_client = aad.clients.build_algod_local_client(node_data_dir)
-    kmd_client = aad.clients.build_kmd_local_client(node_data_dir)
+    algod_client = clients.build_algod_local_client(node_data_dir)
+    kmd_client = clients.build_kmd_local_client(node_data_dir)
 
     # get the address of the first account in the wallet
-    wallet = ag.wallet.Wallet("unencrypted-default-wallet", "", kmd_client)
+    wallet = Wallet("unencrypted-default-wallet", "", kmd_client)
     sender = wallet.list_keys()[0]
 
     print("Account details:")
@@ -22,21 +25,21 @@ def main(node_data_dir: Path):
     # Create a new standalone account. It is also be possible to create an
     # account managed by a wallet with `kmd`.
     # See: https://developer.algorand.org/docs/features/accounts/create/
-    receiver_key, receiver = ag.account.generate_account()
+    receiver_key, receiver = generate_account()
     print(f"  new address: {receiver}")
-    print(f"  passphrase : {ag.mnemonic.from_private_key(receiver_key)}")
+    print(f"  passphrase : {from_private_key(receiver_key)}")
 
     print("Balances:")
     to_account_info = algod_client.account_info(receiver)
     from_account_info = algod_client.account_info(sender)
     print(
         "  from: {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
+            microalgos_to_algos(from_account_info.get("amount", 0))
         )
     )
     print(
         "  to  : {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(to_account_info.get("amount", 0))
+            microalgos_to_algos(to_account_info.get("amount", 0))
         )
     )
 
@@ -60,7 +63,7 @@ def main(node_data_dir: Path):
         sender=sender,
         sp=params,
         receiver=receiver,
-        amt=ag.util.algos_to_microalgos(1),
+        amt=algos_to_microalgos(1),
         note=note,
     )
     # looksup the sender address in the wallet and uses its key to sign
@@ -70,7 +73,7 @@ def main(node_data_dir: Path):
     txid = algod_client.send_transaction(signed_txn)
     print(f"  transaction ID: {txid}")
     print("  waiting for confirmation...")
-    txn_info = aad.transactions.get_confirmed_transaction(algod_client, txid, 4)
+    transactions.get_confirmed_transaction(algod_client, txid, 5)
 
     # Verify the account balances have changed.
     print("Balances:")
@@ -78,12 +81,12 @@ def main(node_data_dir: Path):
     from_account_info = algod_client.account_info(sender)
     print(
         "  from: {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(from_account_info.get("amount", 0))
+            microalgos_to_algos(from_account_info.get("amount", 0))
         )
     )
     print(
         "  to  : {:.6f} Algos".format(
-            ag.util.microalgos_to_algos(to_account_info.get("amount", 0))
+            microalgos_to_algos(to_account_info.get("amount", 0))
         )
     )
 
