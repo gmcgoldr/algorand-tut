@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Dict, List
 
 from algoappdev import *
-from algoappdev.apps import AppBuilder
 from algoappdev.utils import AccountMeta
 from algosdk.encoding import decode_address, encode_address
 from algosdk.future.transaction import ApplicationNoOpTxn, ApplicationOptInTxn
